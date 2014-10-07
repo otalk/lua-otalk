@@ -6,4 +6,19 @@ lua-otalk
 * luasec
 * luasocket
 * lua-expat
-* LuaBind with fixed header (included)
+
+
+```c++
+OTalk otalk;
+
+
+otalk.hook("message", [](lua::Value args) -> void {
+    lua::Value msg = args[1];
+    std::cout << "Message From: " << msg["from"] << "\n";
+});
+
+
+otalk.connect("user@server", "password");
+```
+
+Read the example.cpp
