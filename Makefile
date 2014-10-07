@@ -3,8 +3,8 @@
 #
 LIBS=-llua -ldl
 CXXFLAGS=-g -Wall -Wno-deprecated -std=c++11
-EXECUTABLE=wrapping-test
-SOURCES=otalk.cpp wrapping-test.cpp
+EXECUTABLE=example
+SOURCES=otalk.cpp example.cpp
 OBJDIR=./
 
 # ###################################################################

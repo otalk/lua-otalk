@@ -3,7 +3,7 @@
 #include "otalk.hpp"
 
 OTalk::OTalk() {
-    state.doFile("./wrapping-test.lua");
+    state.doFile("./wrapper.lua");
     connect = state["connect"];
     verse = state["c"];
     hook = state["hook"];

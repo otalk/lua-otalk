@@ -14,7 +14,6 @@ int main (int argc, char *argv[])
         lua::State e_table;
         e_table.set("derp", lua::Table());
         e_table["derp"].set("name", "herrrp");
-        otalk.state.newTable();
         otalk.event("custom", e_table["derp"]);
         otalk.verse["hook"](otalk.verse, "stanza", [](lua::Value stanza) -> void {
             std::cout << "------------\n";
@@ -30,7 +29,7 @@ int main (int argc, char *argv[])
         });
         otalk.connect(jid, pass);
     } else {
-        std::cout << "Usage: ./wrapping-test [username@server] [password]\n";
+        std::cout << "Usage: " << argv[0] << " [username@server] [password]\n";
     }
     return 0;
 }
