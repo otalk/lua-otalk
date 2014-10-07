@@ -7,6 +7,7 @@ c:add_plugin("version");
 c:add_plugin("groupchat");
 
 function hook(name, func)
+    print("setting up hook: "..name);
     c:hook(name, function(...)
         for i, v in ipairs(arg) do
             print(i, v)
@@ -17,6 +18,10 @@ end
 
 function event(name, ...)
     c:event(name, arg);
+end
+
+function joinRoom(name, nick)
+    c:join_room(name, nick);
 end
 
 function connect(jid, password)
@@ -33,7 +38,7 @@ function connect(jid, password)
     c:hook("stanza", function (stanza) print("Stanza:", stanza) end);
 
     -- This one prints all received data
-    --c:hook("incoming-raw", print, 1000);
+    c:hook("incoming-raw", print, 1000);
 
     -- Print a message after authentication
     c:hook("authentication-success", function () print("Logged in!"); end);

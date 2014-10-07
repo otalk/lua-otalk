@@ -21,11 +21,19 @@ int main (int argc, char *argv[])
             if (from.is<lua::String>()) {
                 std::cout << "From: " << stanza["attr"]["from"].toString() << "\n";
             } else {
-                std::cout << "Didn't have from\n";
+                //std::cout << "Didn't have from\n";
             }
         });
-        otalk.hook("ready", [](lua::Value args) -> void {
-            std::cout << "-x-x-x-x-x-x-x-x-\n";
+        otalk.hook("ready", [&otalk](lua::Value args) -> void {
+            std::cout << "======= Begin =======\n";
+            //lua::Value room = otalk.state["joinRoom"]("test@conference.jabber.org", "TestBot213");
+            auto room = otalk.joinRoom("test@conference.jabber.org", "TestBot213");
+            std::cout << "not broken!\n";
+        });
+        otalk.hook("groupchat/joined", [&otalk](lua::Value args) -> void {
+            lua::Value room = args[1];
+            std::cout << "Joined room: " << room["jid"].toString() << "\n";
+            room["send_message"](room, "Halloooo");
         });
         otalk.connect(jid, pass);
     } else {

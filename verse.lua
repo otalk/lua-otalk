@@ -1,7380 +1,9039 @@
-package.preload['util.encodings']=(function(...)
-local function e()
-error("Function not implemented");
+package.preload['util.encodings'] = (function (...)
+local function not_impl()
+	error("Function not implemented");
 end
-local t=require"mime";
-module"encodings"
-stringprep={};
-base64={encode=t.b64,decode=e};
+
+local mime = require "mime";
+
+module "encodings"
+
+stringprep = {};
+base64 = { encode = mime.b64, decode = not_impl }; --mime.unb64 is buggy with \0
+
 return _M;
-end)
-package.preload['util.hashes']=(function(...)
-local e=require"util.sha1";
-return{sha1=e.sha1};
-end)
-package.preload['util.sha1']=(function(...)
-local h=string.len
-local a=string.char
-local g=string.byte
-local k=string.sub
-local s=math.floor
-local t=require"bit"
-local q=t.bnot
-local e=t.band
-local y=t.bor
-local n=t.bxor
-local o=t.lshift
-local i=t.rshift
-local m,l,d,u,c
-local function p(t,e)
-return o(t,e)+i(t,32-e)
+ end)
+package.preload['util.hashes'] = (function (...)
+local sha1 = require "util.sha1";
+
+return { sha1 = sha1.sha1 };
+ end)
+package.preload['util.sha1'] = (function (...)
+-------------------------------------------------
+---      *** SHA-1 algorithm for Lua ***      ---
+-------------------------------------------------
+--- Author:  Martin Huesser                   ---
+--- Date:    2008-06-16                       ---
+--- License: You may use this code in your    ---
+---          projects as long as this header  ---
+---          stays intact.                    ---
+-------------------------------------------------
+
+local strlen  = string.len
+local strchar = string.char
+local strbyte = string.byte
+local strsub  = string.sub
+local floor   = math.floor
+local bit     = require "bit"
+local bnot    = bit.bnot
+local band    = bit.band
+local bor     = bit.bor
+local bxor    = bit.bxor
+local shl     = bit.lshift
+local shr     = bit.rshift
+local h0, h1, h2, h3, h4
+
+-------------------------------------------------
+
+local function LeftRotate(val, nr)
+	return shl(val, nr) + shr(val, 32 - nr)
 end
-local function f(i)
-local t,o
-local t=""
-for n=1,8 do
-o=e(i,15)
-if(o<10)then
-t=a(o+48)..t
-else
-t=a(o+87)..t
+
+-------------------------------------------------
+
+local function ToHex(num)
+	local i, d
+	local str = ""
+	for i = 1, 8 do
+		d = band(num, 15)
+		if (d < 10) then
+			str = strchar(d + 48) .. str
+		else
+			str = strchar(d + 87) .. str
+		end
+		num = floor(num / 16)
+	end
+	return str
 end
-i=s(i/16)
+
+-------------------------------------------------
+
+local function PreProcess(str)
+	local bitlen, i
+	local str2 = ""
+	bitlen = strlen(str) * 8
+	str = str .. strchar(128)
+	i = 56 - band(strlen(str), 63)
+	if (i < 0) then
+		i = i + 64
+	end
+	for i = 1, i do
+		str = str .. strchar(0)
+	end
+	for i = 1, 8 do
+		str2 = strchar(band(bitlen, 255)) .. str2
+		bitlen = floor(bitlen / 256)
+	end
+	return str .. str2
 end
-return t
+
+-------------------------------------------------
+
+local function MainLoop(str)
+	local a, b, c, d, e, f, k, t
+	local i, j
+	local w = {}
+	while (str ~= "") do
+		for i = 0, 15 do
+			w[i] = 0
+			for j = 1, 4 do
+				w[i] = w[i] * 256 + strbyte(str, i * 4 + j)
+			end
+		end
+		for i = 16, 79 do
+			w[i] = LeftRotate(bxor(bxor(w[i - 3], w[i - 8]), bxor(w[i - 14], w[i - 16])), 1)
+		end
+		a = h0
+		b = h1
+		c = h2
+		d = h3
+		e = h4
+		for i = 0, 79 do
+			if (i < 20) then
+				f = bor(band(b, c), band(bnot(b), d))
+				k = 1518500249
+			elseif (i < 40) then
+				f = bxor(bxor(b, c), d)
+				k = 1859775393
+			elseif (i < 60) then
+				f = bor(bor(band(b, c), band(b, d)), band(c, d))
+				k = 2400959708
+			else
+				f = bxor(bxor(b, c), d)
+				k = 3395469782
+			end
+			t = LeftRotate(a, 5) + f + e + k + w[i]	
+			e = d
+			d = c
+			c = LeftRotate(b, 30)
+			b = a
+			a = t
+		end
+		h0 = band(h0 + a, 4294967295)
+		h1 = band(h1 + b, 4294967295)
+		h2 = band(h2 + c, 4294967295)
+		h3 = band(h3 + d, 4294967295)
+		h4 = band(h4 + e, 4294967295)
+		str = strsub(str, 65)
+	end
 end
-local function j(t)
-local i,o
-local n=""
-i=h(t)*8
-t=t..a(128)
-o=56-e(h(t),63)
-if(o<0)then
-o=o+64
+
+-------------------------------------------------
+
+local function sha1(str, hexres)
+	str = PreProcess(str)
+	h0  = 1732584193
+	h1  = 4023233417
+	h2  = 2562383102
+	h3  = 0271733878
+	h4  = 3285377520
+	MainLoop(str)
+	local hex = ToHex(h0)..ToHex(h1)..ToHex(h2)
+	            ..ToHex(h3)..ToHex(h4);
+	if hexres then
+		return  hex;
+	else
+		return (hex:gsub("..", function (byte)
+			return string.char(tonumber(byte, 16));
+		end));
+	end
 end
-for e=1,o do
-t=t..a(0)
-end
-for t=1,8 do
-n=a(e(i,255))..n
-i=s(i/256)
-end
-return t..n
-end
-local function b(f)
-local r,t,o,i,w,h,s,v
-local a,a
-local a={}
-while(f~="")do
-for e=0,15 do
-a[e]=0
-for t=1,4 do
-a[e]=a[e]*256+g(f,e*4+t)
-end
-end
-for e=16,79 do
-a[e]=p(n(n(a[e-3],a[e-8]),n(a[e-14],a[e-16])),1)
-end
-r=m
-t=l
-o=d
-i=u
-w=c
-for d=0,79 do
-if(d<20)then
-h=y(e(t,o),e(q(t),i))
-s=1518500249
-elseif(d<40)then
-h=n(n(t,o),i)
-s=1859775393
-elseif(d<60)then
-h=y(y(e(t,o),e(t,i)),e(o,i))
-s=2400959708
-else
-h=n(n(t,o),i)
-s=3395469782
-end
-v=p(r,5)+h+w+s+a[d]
-w=i
-i=o
-o=p(t,30)
-t=r
-r=v
-end
-m=e(m+r,4294967295)
-l=e(l+t,4294967295)
-d=e(d+o,4294967295)
-u=e(u+i,4294967295)
-c=e(c+w,4294967295)
-f=k(f,65)
-end
-end
-local function a(e,t)
-e=j(e)
-m=1732584193
-l=4023233417
-d=2562383102
-u=271733878
-c=3285377520
-b(e)
-local e=f(m)..f(l)..f(d)
-..f(u)..f(c);
-if t then
-return e;
-else
-return(e:gsub("..",function(e)
-return string.char(tonumber(e,16));
-end));
-end
-end
-_G.sha1={sha1=a};
+
+_G.sha1 = {sha1 = sha1};
 return _G.sha1;
-end)
-package.preload['lib.adhoc']=(function(...)
-local n,h=require"util.stanza",require"util.uuid";
-local e="http://jabber.org/protocol/commands";
-local i={}
-local s={};
-function _cmdtag(o,i,t,a)
-local e=n.stanza("command",{xmlns=e,node=o.node,status=i});
-if t then e.attr.sessionid=t;end
-if a then e.attr.action=a;end
-return e;
+
+-------------------------------------------------
+-------------------------------------------------
+-------------------------------------------------
+ end)
+package.preload['lib.adhoc'] = (function (...)
+-- Copyright (C) 2009-2010 Florian Zeitz
+--
+-- This file is MIT/X11 licensed. Please see the
+-- COPYING file in the source package for more information.
+--
+
+local st, uuid = require "util.stanza", require "util.uuid";
+
+local xmlns_cmd = "http://jabber.org/protocol/commands";
+
+local states = {}
+
+local _M = {};
+
+function _cmdtag(desc, status, sessionid, action)
+	local cmd = st.stanza("command", { xmlns = xmlns_cmd, node = desc.node, status = status });
+	if sessionid then cmd.attr.sessionid = sessionid; end
+	if action then cmd.attr.action = action; end
+
+	return cmd;
 end
-function s.new(e,a,t,o)
-return{name=e,node=a,handler=t,cmdtag=_cmdtag,permission=(o or"user")};
+
+function _M.new(name, node, handler, permission)
+	return { name = name, node = node, handler = handler, cmdtag = _cmdtag, permission = (permission or "user") };
 end
-function s.handle_cmd(o,s,a)
-local e=a.tags[1].attr.sessionid or h.generate();
-local t={};
-t.to=a.attr.to;
-t.from=a.attr.from;
-t.action=a.tags[1].attr.action or"execute";
-t.form=a.tags[1]:child_with_ns("jabber:x:data");
-local t,h=o:handler(t,i[e]);
-i[e]=h;
-local a=n.reply(a);
-if t.status=="completed"then
-i[e]=nil;
-cmdtag=o:cmdtag("completed",e);
-elseif t.status=="canceled"then
-i[e]=nil;
-cmdtag=o:cmdtag("canceled",e);
-elseif t.status=="error"then
-i[e]=nil;
-a=n.error_reply(a,t.error.type,t.error.condition,t.error.message);
-s.send(a);
-return true;
-else
-cmdtag=o:cmdtag("executing",e);
+
+function _M.handle_cmd(command, origin, stanza)
+	local sessionid = stanza.tags[1].attr.sessionid or uuid.generate();
+	local dataIn = {};
+	dataIn.to = stanza.attr.to;
+	dataIn.from = stanza.attr.from;
+	dataIn.action = stanza.tags[1].attr.action or "execute";
+	dataIn.form = stanza.tags[1]:child_with_ns("jabber:x:data");
+
+	local data, state = command:handler(dataIn, states[sessionid]);
+	states[sessionid] = state;
+	local stanza = st.reply(stanza);
+	if data.status == "completed" then
+		states[sessionid] = nil;
+		cmdtag = command:cmdtag("completed", sessionid);
+	elseif data.status == "canceled" then
+		states[sessionid] = nil;
+		cmdtag = command:cmdtag("canceled", sessionid);
+	elseif data.status == "error" then
+		states[sessionid] = nil;
+		stanza = st.error_reply(stanza, data.error.type, data.error.condition, data.error.message);
+		origin.send(stanza);
+		return true;
+	else
+		cmdtag = command:cmdtag("executing", sessionid);
+	end
+
+	for name, content in pairs(data) do
+		if name == "info" then
+			cmdtag:tag("note", {type="info"}):text(content):up();
+		elseif name == "warn" then
+			cmdtag:tag("note", {type="warn"}):text(content):up();
+		elseif name == "error" then
+			cmdtag:tag("note", {type="error"}):text(content.message):up();
+		elseif name =="actions" then
+			local actions = st.stanza("actions");
+			for _, action in ipairs(content) do
+				if (action == "prev") or (action == "next") or (action == "complete") then
+					actions:tag(action):up();
+				else
+					module:log("error", 'Command "'..command.name..
+						'" at node "'..command.node..'" provided an invalid action "'..action..'"');
+				end
+			end
+			cmdtag:add_child(actions);
+		elseif name == "form" then
+			cmdtag:add_child((content.layout or content):form(content.values));
+		elseif name == "result" then
+			cmdtag:add_child((content.layout or content):form(content.values, "result"));
+		elseif name == "other" then
+			cmdtag:add_child(content);
+		end
+	end
+	stanza:add_child(cmdtag);
+	origin.send(stanza);
+
+	return true;
 end
-for t,e in pairs(t)do
-if t=="info"then
-cmdtag:tag("note",{type="info"}):text(e):up();
-elseif t=="warn"then
-cmdtag:tag("note",{type="warn"}):text(e):up();
-elseif t=="error"then
-cmdtag:tag("note",{type="error"}):text(e.message):up();
-elseif t=="actions"then
-local t=n.stanza("actions");
-for a,e in ipairs(e)do
-if(e=="prev")or(e=="next")or(e=="complete")then
-t:tag(e):up();
-else
-module:log("error",'Command "'..o.name..
-'" at node "'..o.node..'" provided an invalid action "'..e..'"');
-end
-end
-cmdtag:add_child(t);
-elseif t=="form"then
-cmdtag:add_child((e.layout or e):form(e.values));
-elseif t=="result"then
-cmdtag:add_child((e.layout or e):form(e.values,"result"));
-elseif t=="other"then
-cmdtag:add_child(e);
-end
-end
-a:add_child(cmdtag);
-s.send(a);
-return true;
-end
-return s;
-end)
-package.preload['util.rsm']=(function(...)
-local s=require"util.stanza".stanza;
-local t,o=tostring,tonumber;
-local n=type;
-local h=pairs;
-local i='http://jabber.org/protocol/rsm';
-local a={};
+
+return _M;
+ end)
+package.preload['util.rsm'] = (function (...)
+local stanza = require"util.stanza".stanza;
+local tostring, tonumber = tostring, tonumber;
+local type = type;
+local pairs = pairs;
+
+local xmlns_rsm = 'http://jabber.org/protocol/rsm';
+
+local element_parsers = {};
+
 do
-local e=a;
-local function t(e)
-return o((e:get_text()));
+	local parsers = element_parsers;
+	local function xs_int(st)
+		return tonumber((st:get_text()));
+	end
+	local function xs_string(st)
+		return st:get_text();
+	end
+
+	parsers.after = xs_string;
+	parsers.before = function(st)
+			local text = st:get_text();
+			return text == "" or text;
+		end;
+	parsers.max = xs_int;
+	parsers.index = xs_int;
+
+	parsers.first = function(st)
+			return { index = tonumber(st.attr.index); st:get_text() };
+		end;
+	parsers.last = xs_string;
+	parsers.count = xs_int;
 end
-local function a(t)
-return t:get_text();
-end
-e.after=a;
-e.before=function(e)
-local e=e:get_text();
-return e==""or e;
-end;
-e.max=t;
-e.index=t;
-e.first=function(e)
-return{index=o(e.attr.index);e:get_text()};
-end;
-e.last=a;
-e.count=t;
-end
-local r=setmetatable({
-first=function(a,e)
-if n(e)=="table"then
-a:tag("first",{index=e.index}):text(e[1]):up();
-else
-a:tag("first"):text(t(e)):up();
-end
-end;
-before=function(a,e)
-if e==true then
-a:tag("before"):up();
-else
-a:tag("before"):text(t(e)):up();
-end
-end
-},{
-__index=function(e,a)
-return function(o,e)
-o:tag(a):text(t(e)):up();
-end
-end;
+
+local element_generators = setmetatable({
+	first = function(st, data)
+		if type(data) == "table" then
+			st:tag("first", { index = data.index }):text(data[1]):up();
+		else
+			st:tag("first"):text(tostring(data)):up();
+		end
+	end;
+	before = function(st, data)
+		if data == true then
+			st:tag("before"):up();
+		else
+			st:tag("before"):text(tostring(data)):up();
+		end
+	end
+}, {
+	__index = function(_, name)
+		return function(st, data)
+			st:tag(name):text(tostring(data)):up();
+		end
+	end;
 });
-local function o(e)
-local t={};
-for o in e:childtags()do
-local e=o.name;
-local a=e and a[e];
-if a then
-t[e]=a(o);
+
+
+local function parse(set)
+	local rs = {};
+	for tag in set:childtags() do
+		local name = tag.name;
+		local parser = name and element_parsers[name];
+		if parser then
+			rs[name] = parser(tag);
+		end
+	end
+	return rs;
 end
+
+local function generate(t)
+	local st = stanza("set", { xmlns = xmlns_rsm });
+	for k,v in pairs(t) do
+		if element_parsers[k] then
+			element_generators[k](st, v);
+		end
+	end
+	return st;
 end
-return t;
+
+local function get(st)
+	local set = st:get_child("set", xmlns_rsm);
+	if set and #set.tags > 0 then
+		return parse(set);
+	end
 end
-local function n(t)
-local e=s("set",{xmlns=i});
-for t,o in h(t)do
-if a[t]then
-r[t](e,o);
+
+return { parse = parse, generate = generate, get = get };
+ end)
+package.preload['util.stanza'] = (function (...)
+-- Prosody IM
+-- Copyright (C) 2008-2010 Matthew Wild
+-- Copyright (C) 2008-2010 Waqas Hussain
+-- 
+-- This project is MIT/X11 licensed. Please see the
+-- COPYING file in the source package for more information.
+--
+
+
+local t_insert      =  table.insert;
+local t_concat      =  table.concat;
+local t_remove      =  table.remove;
+local t_concat      =  table.concat;
+local s_format      = string.format;
+local s_match       =  string.match;
+local tostring      =      tostring;
+local setmetatable  =  setmetatable;
+local getmetatable  =  getmetatable;
+local pairs         =         pairs;
+local ipairs        =        ipairs;
+local type          =          type;
+local next          =          next;
+local print         =         print;
+local unpack        =        unpack;
+local s_gsub        =   string.gsub;
+local s_char        =   string.char;
+local s_find        =   string.find;
+local os            =            os;
+
+local do_pretty_printing = not os.getenv("WINDIR");
+local getstyle, getstring;
+if do_pretty_printing then
+	local ok, termcolours = pcall(require, "util.termcolours");
+	if ok then
+		getstyle, getstring = termcolours.getstyle, termcolours.getstring;
+	else
+		do_pretty_printing = nil;
+	end
 end
+
+local xmlns_stanzas = "urn:ietf:params:xml:ns:xmpp-stanzas";
+
+module "stanza"
+
+stanza_mt = { __type = "stanza" };
+stanza_mt.__index = stanza_mt;
+local stanza_mt = stanza_mt;
+
+function stanza(name, attr)
+	local stanza = { name = name, attr = attr or {}, tags = {} };
+	return setmetatable(stanza, stanza_mt);
 end
-return e;
+local stanza = stanza;
+
+function stanza_mt:query(xmlns)
+	return self:tag("query", { xmlns = xmlns });
 end
-local function t(e)
-local e=e:get_child("set",i);
-if e and#e.tags>0 then
-return o(e);
+
+function stanza_mt:body(text, attr)
+	return self:tag("body", attr):text(text);
 end
+
+function stanza_mt:tag(name, attrs)
+	local s = stanza(name, attrs);
+	local last_add = self.last_add;
+	if not last_add then last_add = {}; self.last_add = last_add; end
+	(last_add[#last_add] or self):add_direct_child(s);
+	t_insert(last_add, s);
+	return self;
 end
-return{parse=o,generate=n,get=t};
-end)
-package.preload['util.stanza']=(function(...)
-local t=table.insert;
-local e=table.concat;
-local s=table.remove;
-local y=table.concat;
-local h=string.format;
-local w=string.match;
-local c=tostring;
-local m=setmetatable;
-local e=getmetatable;
-local n=pairs;
-local i=ipairs;
-local o=type;
-local e=next;
-local e=print;
-local e=unpack;
-local v=string.gsub;
-local e=string.char;
-local f=string.find;
-local e=os;
-local u=not e.getenv("WINDIR");
-local l,a;
-if u then
-local t,e=pcall(require,"util.termcolours");
-if t then
-l,a=e.getstyle,e.getstring;
-else
-u=nil;
+
+function stanza_mt:text(text)
+	local last_add = self.last_add;
+	(last_add and last_add[#last_add] or self):add_direct_child(text);
+	return self;
 end
+
+function stanza_mt:up()
+	local last_add = self.last_add;
+	if last_add then t_remove(last_add); end
+	return self;
 end
-local p="urn:ietf:params:xml:ns:xmpp-stanzas";
-module"stanza"
-stanza_mt={__type="stanza"};
-stanza_mt.__index=stanza_mt;
-local e=stanza_mt;
-function stanza(a,t)
-local t={name=a,attr=t or{},tags={}};
-return m(t,e);
+
+function stanza_mt:reset()
+	self.last_add = nil;
+	return self;
 end
-local r=stanza;
-function e:query(e)
-return self:tag("query",{xmlns=e});
+
+function stanza_mt:add_direct_child(child)
+	if type(child) == "table" then
+		t_insert(self.tags, child);
+	end
+	t_insert(self, child);
 end
-function e:body(t,e)
-return self:tag("body",e):text(t);
+
+function stanza_mt:add_child(child)
+	local last_add = self.last_add;
+	(last_add and last_add[#last_add] or self):add_direct_child(child);
+	return self;
 end
-function e:tag(e,a)
-local a=r(e,a);
-local e=self.last_add;
-if not e then e={};self.last_add=e;end
-(e[#e]or self):add_direct_child(a);
-t(e,a);
-return self;
+
+function stanza_mt:get_child(name, xmlns)
+	for _, child in ipairs(self.tags) do
+		if (not name or child.name == name)
+			and ((not xmlns and self.attr.xmlns == child.attr.xmlns)
+				or child.attr.xmlns == xmlns) then
+			
+			return child;
+		end
+	end
 end
-function e:text(t)
-local e=self.last_add;
-(e and e[#e]or self):add_direct_child(t);
-return self;
+
+function stanza_mt:get_child_text(name, xmlns)
+	local tag = self:get_child(name, xmlns);
+	if tag then
+		return tag:get_text();
+	end
+	return nil;
 end
-function e:up()
-local e=self.last_add;
-if e then s(e);end
-return self;
+
+function stanza_mt:child_with_name(name)
+	for _, child in ipairs(self.tags) do
+		if child.name == name then return child; end
+	end
 end
-function e:reset()
-self.last_add=nil;
-return self;
+
+function stanza_mt:child_with_ns(ns)
+	for _, child in ipairs(self.tags) do
+		if child.attr.xmlns == ns then return child; end
+	end
 end
-function e:add_direct_child(e)
-if o(e)=="table"then
-t(self.tags,e);
+
+function stanza_mt:children()
+	local i = 0;
+	return function (a)
+			i = i + 1
+			return a[i];
+		end, self, i;
 end
-t(self,e);
+
+function stanza_mt:childtags(name, xmlns)
+	xmlns = xmlns or self.attr.xmlns;
+	local tags = self.tags;
+	local start_i, max_i = 1, #tags;
+	return function ()
+		for i = start_i, max_i do
+			local v = tags[i];
+			if (not name or v.name == name)
+			and (not xmlns or xmlns == v.attr.xmlns) then
+				start_i = i+1;
+				return v;
+			end
+		end
+	end;
 end
-function e:add_child(t)
-local e=self.last_add;
-(e and e[#e]or self):add_direct_child(t);
-return self;
+
+function stanza_mt:maptags(callback)
+	local tags, curr_tag = self.tags, 1;
+	local n_children, n_tags = #self, #tags;
+	
+	local i = 1;
+	while curr_tag <= n_tags do
+		if self[i] == tags[curr_tag] then
+			local ret = callback(self[i]);
+			if ret == nil then
+				t_remove(self, i);
+				t_remove(tags, curr_tag);
+				n_children = n_children - 1;
+				n_tags = n_tags - 1;
+			else
+				self[i] = ret;
+				tags[i] = ret;
+			end
+			i = i + 1;
+			curr_tag = curr_tag + 1;
+		end
+	end
+	return self;
 end
-function e:get_child(a,t)
-for o,e in i(self.tags)do
-if(not a or e.name==a)
-and((not t and self.attr.xmlns==e.attr.xmlns)
-or e.attr.xmlns==t)then
-return e;
-end
-end
-end
-function e:get_child_text(t,e)
-local e=self:get_child(t,e);
-if e then
-return e:get_text();
-end
-return nil;
-end
-function e:child_with_name(t)
-for a,e in i(self.tags)do
-if e.name==t then return e;end
-end
-end
-function e:child_with_ns(t)
-for a,e in i(self.tags)do
-if e.attr.xmlns==t then return e;end
-end
-end
-function e:children()
-local e=0;
-return function(t)
-e=e+1
-return t[e];
-end,self,e;
-end
-function e:childtags(i,e)
-e=e or self.attr.xmlns;
-local t=self.tags;
-local o,a=1,#t;
-return function()
-for a=o,a do
-local t=t[a];
-if(not i or t.name==i)
-and(not e or e==t.attr.xmlns)then
-o=a+1;
-return t;
-end
-end
-end;
-end
-function e:maptags(i)
-local a,t=self.tags,1;
-local n,o=#self,#a;
-local e=1;
-while t<=o do
-if self[e]==a[t]then
-local i=i(self[e]);
-if i==nil then
-s(self,e);
-s(a,t);
-n=n-1;
-o=o-1;
-else
-self[e]=i;
-a[e]=i;
-end
-e=e+1;
-t=t+1;
-end
-end
-return self;
-end
-local d
+
+local xml_escape
 do
-local e={["'"]="&apos;",["\""]="&quot;",["<"]="&lt;",[">"]="&gt;",["&"]="&amp;"};
-function d(t)return(v(t,"['&<>\"]",e));end
-_M.xml_escape=d;
+	local escape_table = { ["'"] = "&apos;", ["\""] = "&quot;", ["<"] = "&lt;", [">"] = "&gt;", ["&"] = "&amp;" };
+	function xml_escape(str) return (s_gsub(str, "['&<>\"]", escape_table)); end
+	_M.xml_escape = xml_escape;
 end
-local function s(a,e,h,o,r)
-local i=0;
-local s=a.name
-t(e,"<"..s);
-for a,n in n(a.attr)do
-if f(a,"\1",1,true)then
-local a,s=w(a,"^([^\1]*)\1?(.*)$");
-i=i+1;
-t(e," xmlns:ns"..i.."='"..o(a).."' ".."ns"..i..":"..s.."='"..o(n).."'");
-elseif not(a=="xmlns"and n==r)then
-t(e," "..a.."='"..o(n).."'");
+
+local function _dostring(t, buf, self, xml_escape, parentns)
+	local nsid = 0;
+	local name = t.name
+	t_insert(buf, "<"..name);
+	for k, v in pairs(t.attr) do
+		if s_find(k, "\1", 1, true) then
+			local ns, attrk = s_match(k, "^([^\1]*)\1?(.*)$");
+			nsid = nsid + 1;
+			t_insert(buf, " xmlns:ns"..nsid.."='"..xml_escape(ns).."' ".."ns"..nsid..":"..attrk.."='"..xml_escape(v).."'");
+		elseif not(k == "xmlns" and v == parentns) then
+			t_insert(buf, " "..k.."='"..xml_escape(v).."'");
+		end
+	end
+	local len = #t;
+	if len == 0 then
+		t_insert(buf, "/>");
+	else
+		t_insert(buf, ">");
+		for n=1,len do
+			local child = t[n];
+			if child.name then
+				self(child, buf, self, xml_escape, t.attr.xmlns);
+			else
+				t_insert(buf, xml_escape(child));
+			end
+		end
+		t_insert(buf, "</"..name..">");
+	end
 end
+function stanza_mt.__tostring(t)
+	local buf = {};
+	_dostring(t, buf, _dostring, xml_escape, nil);
+	return t_concat(buf);
 end
-local i=#a;
-if i==0 then
-t(e,"/>");
-else
-t(e,">");
-for i=1,i do
-local i=a[i];
-if i.name then
-h(i,e,h,o,a.attr.xmlns);
-else
-t(e,o(i));
+
+function stanza_mt.top_tag(t)
+	local attr_string = "";
+	if t.attr then
+		for k, v in pairs(t.attr) do if type(k) == "string" then attr_string = attr_string .. s_format(" %s='%s'", k, xml_escape(tostring(v))); end end
+	end
+	return s_format("<%s%s>", t.name, attr_string);
 end
+
+function stanza_mt.get_text(t)
+	if #t.tags == 0 then
+		return t_concat(t);
+	end
 end
-t(e,"</"..s..">");
+
+function stanza_mt.get_error(stanza)
+	local type, condition, text;
+	
+	local error_tag = stanza:get_child("error");
+	if not error_tag then
+		return nil, nil, nil;
+	end
+	type = error_tag.attr.type;
+	
+	for child in error_tag:childtags() do
+		if child.attr.xmlns == xmlns_stanzas then
+			if not text and child.name == "text" then
+				text = child:get_text();
+			elseif not condition then
+				condition = child.name;
+			end
+			if condition and text then
+				break;
+			end
+		end
+	end
+	return type, condition or "undefined-condition", text;
 end
+
+function stanza_mt.__add(s1, s2)
+	return s1:add_direct_child(s2);
 end
-function e.__tostring(t)
-local e={};
-s(t,e,s,d,nil);
-return y(e);
-end
-function e.top_tag(t)
-local e="";
-if t.attr then
-for t,a in n(t.attr)do if o(t)=="string"then e=e..h(" %s='%s'",t,d(c(a)));end end
-end
-return h("<%s%s>",t.name,e);
-end
-function e.get_text(e)
-if#e.tags==0 then
-return y(e);
-end
-end
-function e.get_error(a)
-local o,t,e;
-local a=a:get_child("error");
-if not a then
-return nil,nil,nil;
-end
-o=a.attr.type;
-for a in a:childtags()do
-if a.attr.xmlns==p then
-if not e and a.name=="text"then
-e=a:get_text();
-elseif not t then
-t=a.name;
-end
-if t and e then
-break;
-end
-end
-end
-return o,t or"undefined-condition",e;
-end
-function e.__add(e,t)
-return e:add_direct_child(t);
-end
+
+
 do
-local e=0;
-function new_id()
-e=e+1;
-return"lx"..e;
+	local id = 0;
+	function new_id()
+		id = id + 1;
+		return "lx"..id;
+	end
 end
+
+function preserialize(stanza)
+	local s = { name = stanza.name, attr = stanza.attr };
+	for _, child in ipairs(stanza) do
+		if type(child) == "table" then
+			t_insert(s, preserialize(child));
+		else
+			t_insert(s, child);
+		end
+	end
+	return s;
 end
-function preserialize(a)
-local e={name=a.name,attr=a.attr};
-for i,a in i(a)do
-if o(a)=="table"then
-t(e,preserialize(a));
-else
-t(e,a);
+
+function deserialize(stanza)
+	-- Set metatable
+	if stanza then
+		local attr = stanza.attr;
+		for i=1,#attr do attr[i] = nil; end
+		local attrx = {};
+		for att in pairs(attr) do
+			if s_find(att, "|", 1, true) and not s_find(att, "\1", 1, true) then
+				local ns,na = s_match(att, "^([^|]+)|(.+)$");
+				attrx[ns.."\1"..na] = attr[att];
+				attr[att] = nil;
+			end
+		end
+		for a,v in pairs(attrx) do
+			attr[a] = v;
+		end
+		setmetatable(stanza, stanza_mt);
+		for _, child in ipairs(stanza) do
+			if type(child) == "table" then
+				deserialize(child);
+			end
+		end
+		if not stanza.tags then
+			-- Rebuild tags
+			local tags = {};
+			for _, child in ipairs(stanza) do
+				if type(child) == "table" then
+					t_insert(tags, child);
+				end
+			end
+			stanza.tags = tags;
+		end
+	end
+	
+	return stanza;
 end
+
+local function _clone(stanza)
+	local attr, tags = {}, {};
+	for k,v in pairs(stanza.attr) do attr[k] = v; end
+	local new = { name = stanza.name, attr = attr, tags = tags };
+	for i=1,#stanza do
+		local child = stanza[i];
+		if child.name then
+			child = _clone(child);
+			t_insert(tags, child);
+		end
+		t_insert(new, child);
+	end
+	return setmetatable(new, stanza_mt);
 end
-return e;
+clone = _clone;
+
+function message(attr, body)
+	if not body then
+		return stanza("message", attr);
+	else
+		return stanza("message", attr):tag("body"):text(body):up();
+	end
 end
-function deserialize(a)
-if a then
-local s=a.attr;
-for e=1,#s do s[e]=nil;end
-local h={};
-for e in n(s)do
-if f(e,"|",1,true)and not f(e,"\1",1,true)then
-local t,a=w(e,"^([^|]+)|(.+)$");
-h[t.."\1"..a]=s[e];
-s[e]=nil;
+function iq(attr)
+	if attr and not attr.id then attr.id = new_id(); end
+	return stanza("iq", attr or { id = new_id() });
 end
+
+function reply(orig)
+	return stanza(orig.name, orig.attr and { to = orig.attr.from, from = orig.attr.to, id = orig.attr.id, type = ((orig.name == "iq" and "result") or orig.attr.type) });
 end
-for e,t in n(h)do
-s[e]=t;
-end
-m(a,e);
-for t,e in i(a)do
-if o(e)=="table"then
-deserialize(e);
-end
-end
-if not a.tags then
-local e={};
-for n,i in i(a)do
-if o(i)=="table"then
-t(e,i);
-end
-end
-a.tags=e;
-end
-end
-return a;
-end
-local function s(a)
-local o,i={},{};
-for t,e in n(a.attr)do o[t]=e;end
-local o={name=a.name,attr=o,tags=i};
-for e=1,#a do
-local e=a[e];
-if e.name then
-e=s(e);
-t(i,e);
-end
-t(o,e);
-end
-return m(o,e);
-end
-clone=s;
-function message(t,e)
-if not e then
-return r("message",t);
-else
-return r("message",t):tag("body"):text(e):up();
-end
-end
-function iq(e)
-if e and not e.id then e.id=new_id();end
-return r("iq",e or{id=new_id()});
-end
-function reply(e)
-return r(e.name,e.attr and{to=e.attr.from,from=e.attr.to,id=e.attr.id,type=((e.name=="iq"and"result")or e.attr.type)});
-end
+
 do
-local a={xmlns=p};
-function error_reply(e,o,i,t)
-local e=reply(e);
-e.attr.type="error";
-e:tag("error",{type=o})
-:tag(i,a):up();
-if(t)then e:tag("text",a):text(t):up();end
-return e;
+	local xmpp_stanzas_attr = { xmlns = xmlns_stanzas };
+	function error_reply(orig, type, condition, message)
+		local t = reply(orig);
+		t.attr.type = "error";
+		t:tag("error", {type = type}) --COMPAT: Some day xmlns:stanzas goes here
+			:tag(condition, xmpp_stanzas_attr):up();
+		if (message) then t:tag("text", xmpp_stanzas_attr):text(message):up(); end
+		return t; -- stanza ready for adding app-specific errors
+	end
 end
+
+function presence(attr)
+	return stanza("presence", attr);
 end
-function presence(e)
-return r("presence",e);
-end
-if u then
-local r=l("yellow");
-local u=l("red");
-local s=l("red");
-local t=l("magenta");
-local r=" "..a(r,"%s")..a(t,"=")..a(u,"'%s'");
-local l=a(t,"<")..a(s,"%s").."%s"..a(t,">");
-local s=l.."%s"..a(t,"</")..a(s,"%s")..a(t,">");
-function e.pretty_print(e)
-local t="";
-for a,e in i(e)do
-if o(e)=="string"then
-t=t..d(e);
+
+if do_pretty_printing then
+	local style_attrk = getstyle("yellow");
+	local style_attrv = getstyle("red");
+	local style_tagname = getstyle("red");
+	local style_punc = getstyle("magenta");
+	
+	local attr_format = " "..getstring(style_attrk, "%s")..getstring(style_punc, "=")..getstring(style_attrv, "'%s'");
+	local top_tag_format = getstring(style_punc, "<")..getstring(style_tagname, "%s").."%s"..getstring(style_punc, ">");
+	--local tag_format = getstring(style_punc, "<")..getstring(style_tagname, "%s").."%s"..getstring(style_punc, ">").."%s"..getstring(style_punc, "</")..getstring(style_tagname, "%s")..getstring(style_punc, ">");
+	local tag_format = top_tag_format.."%s"..getstring(style_punc, "</")..getstring(style_tagname, "%s")..getstring(style_punc, ">");
+	function stanza_mt.pretty_print(t)
+		local children_text = "";
+		for n, child in ipairs(t) do
+			if type(child) == "string" then
+				children_text = children_text .. xml_escape(child);
+			else
+				children_text = children_text .. child:pretty_print();
+			end
+		end
+
+		local attr_string = "";
+		if t.attr then
+			for k, v in pairs(t.attr) do if type(k) == "string" then attr_string = attr_string .. s_format(attr_format, k, tostring(v)); end end
+		end
+		return s_format(tag_format, t.name, attr_string, children_text, t.name);
+	end
+	
+	function stanza_mt.pretty_top_tag(t)
+		local attr_string = "";
+		if t.attr then
+			for k, v in pairs(t.attr) do if type(k) == "string" then attr_string = attr_string .. s_format(attr_format, k, tostring(v)); end end
+		end
+		return s_format(top_tag_format, t.name, attr_string);
+	end
 else
-t=t..e:pretty_print();
+	-- Sorry, fresh out of colours for you guys ;)
+	stanza_mt.pretty_print = stanza_mt.__tostring;
+	stanza_mt.pretty_top_tag = stanza_mt.top_tag;
 end
-end
-local a="";
-if e.attr then
-for e,t in n(e.attr)do if o(e)=="string"then a=a..h(r,e,c(t));end end
-end
-return h(s,e.name,a,t,e.name);
-end
-function e.pretty_top_tag(e)
-local t="";
-if e.attr then
-for e,a in n(e.attr)do if o(e)=="string"then t=t..h(r,e,c(a));end end
-end
-return h(l,e.name,t);
-end
-else
-e.pretty_print=e.__tostring;
-e.pretty_top_tag=e.top_tag;
-end
+
 return _M;
-end)
-package.preload['util.timer']=(function(...)
-local u=require"net.server".addtimer;
-local o=require"net.server".event;
-local l=require"net.server".event_base;
-local d=math.min
-local c=math.huge
-local r=require"socket".gettime;
-local s=table.insert;
-local e=table.remove;
-local e,n=ipairs,pairs;
-local h=type;
-local i={};
-local a={};
-module"timer"
-local t;
-if not o then
-function t(e,o)
-local i=r();
-e=e+i;
-if e>=i then
-s(a,{e,o});
+ end)
+package.preload['util.timer'] = (function (...)
+-- Prosody IM
+-- Copyright (C) 2008-2010 Matthew Wild
+-- Copyright (C) 2008-2010 Waqas Hussain
+-- 
+-- This project is MIT/X11 licensed. Please see the
+-- COPYING file in the source package for more information.
+--
+
+
+local ns_addtimer = require "net.server".addtimer;
+local event = require "net.server".event;
+local event_base = require "net.server".event_base;
+
+local math_min = math.min
+local math_huge = math.huge
+local get_time = require "socket".gettime;
+local t_insert = table.insert;
+local t_remove = table.remove;
+local ipairs, pairs = ipairs, pairs;
+local type = type;
+
+local data = {};
+local new_data = {};
+
+module "timer"
+
+local _add_task;
+if not event then
+	function _add_task(delay, callback)
+		local current_time = get_time();
+		delay = delay + current_time;
+		if delay >= current_time then
+			t_insert(new_data, {delay, callback});
+		else
+			local r = callback();
+			if r and type(r) == "number" then
+				return _add_task(r, callback);
+			end
+		end
+	end
+
+	ns_addtimer(function()
+		local current_time = get_time();
+		if #new_data > 0 then
+			for _, d in pairs(new_data) do
+				t_insert(data, d);
+			end
+			new_data = {};
+		end
+		
+		local next_time = math_huge;
+		for i, d in pairs(data) do
+			local t, callback = d[1], d[2];
+			if t <= current_time then
+				data[i] = nil;
+				local r = callback(current_time);
+				if type(r) == "number" then
+					_add_task(r, callback);
+					next_time = math_min(next_time, r);
+				end
+			else
+				next_time = math_min(next_time, t - current_time);
+			end
+		end
+		return next_time;
+	end);
 else
-local e=o();
-if e and h(e)=="number"then
-return t(e,o);
+	local EVENT_LEAVE = (event.core and event.core.LEAVE) or -1;
+	function _add_task(delay, callback)
+		local event_handle;
+		event_handle = event_base:addevent(nil, 0, function ()
+			local ret = callback();
+			if ret then
+				return 0, ret;
+			elseif event_handle then
+				return EVENT_LEAVE;
+			end
+		end
+		, delay);
+	end
 end
-end
-end
-u(function()
-local o=r();
-if#a>0 then
-for t,e in n(a)do
-s(i,e);
-end
-a={};
-end
-local e=c;
-for r,a in n(i)do
-local n,s=a[1],a[2];
-if n<=o then
-i[r]=nil;
-local a=s(o);
-if h(a)=="number"then
-t(a,s);
-e=d(e,a);
-end
-else
-e=d(e,n-o);
-end
-end
-return e;
-end);
-else
-local a=(o.core and o.core.LEAVE)or-1;
-function t(o,t)
-local e;
-e=l:addevent(nil,0,function()
-local t=t();
-if t then
-return 0,t;
-elseif e then
-return a;
-end
-end
-,o);
-end
-end
-add_task=t;
+
+add_task = _add_task;
+
 return _M;
-end)
-package.preload['util.termcolours']=(function(...)
-local l,r=table.concat,table.insert;
-local t,d=string.char,string.format;
-local h=ipairs;
-local s=io.write;
-local e;
-if os.getenv("WINDIR")then
-e=require"util.windows";
+ end)
+package.preload['util.termcolours'] = (function (...)
+-- Prosody IM
+-- Copyright (C) 2008-2010 Matthew Wild
+-- Copyright (C) 2008-2010 Waqas Hussain
+-- 
+-- This project is MIT/X11 licensed. Please see the
+-- COPYING file in the source package for more information.
+--
+
+
+local t_concat, t_insert = table.concat, table.insert;
+local char, format = string.char, string.format;
+local ipairs = ipairs;
+local io_write = io.write;
+
+local windows;
+if os.getenv("WINDIR") then
+	windows = require "util.windows";
 end
-local o=e and e.get_consolecolor and e.get_consolecolor();
-module"termcolours"
-local n={
-reset=0;bright=1,dim=2,underscore=4,blink=5,reverse=7,hidden=8;
-black=30;red=31;green=32;yellow=33;blue=34;magenta=35;cyan=36;white=37;
-["black background"]=40;["red background"]=41;["green background"]=42;["yellow background"]=43;["blue background"]=44;["magenta background"]=45;["cyan background"]=46;["white background"]=47;
-bold=1,dark=2,underline=4,underlined=4,normal=0;
+local orig_color = windows and windows.get_consolecolor and windows.get_consolecolor();
+
+module "termcolours"
+
+local stylemap = {
+			reset = 0; bright = 1, dim = 2, underscore = 4, blink = 5, reverse = 7, hidden = 8;
+			black = 30; red = 31; green = 32; yellow = 33; blue = 34; magenta = 35; cyan = 36; white = 37;
+			["black background"] = 40; ["red background"] = 41; ["green background"] = 42; ["yellow background"] = 43; ["blue background"] = 44; ["magenta background"] = 45; ["cyan background"] = 46; ["white background"] = 47;
+			bold = 1, dark = 2, underline = 4, underlined = 4, normal = 0;
+		}
+
+local winstylemap = {
+	["0"] = orig_color, -- reset
+	["1"] = 7+8, -- bold
+	["1;33"] = 2+4+8, -- bold yellow
+	["1;31"] = 4+8 -- bold red
 }
-local i={
-["0"]=o,
-["1"]=7+8,
-["1;33"]=2+4+8,
-["1;31"]=4+8
-}
-local a=t(27).."[%sm%s"..t(27).."[0m";
-function getstring(e,t)
-if e then
-return d(a,e,t);
-else
-return t;
+
+local fmt_string = char(0x1B).."[%sm%s"..char(0x1B).."[0m";
+function getstring(style, text)
+	if style then
+		return format(fmt_string, style, text);
+	else
+		return text;
+	end
 end
-end
+
 function getstyle(...)
-local e,t={...},{};
-for a,e in h(e)do
-e=n[e];
-if e then
-r(t,e);
+	local styles, result = { ... }, {};
+	for i, style in ipairs(styles) do
+		style = stylemap[style];
+		if style then
+			t_insert(result, style);
+		end
+	end
+	return t_concat(result, ";");
 end
+
+local last = "0";
+function setstyle(style)
+	style = style or "0";
+	if style ~= last then
+		io_write("\27["..style.."m");
+		last = style;
+	end
 end
-return l(t,";");
+
+if windows then
+	function setstyle(style)
+		style = style or "0";
+		if style ~= last then
+			windows.set_consolecolor(winstylemap[style] or orig_color);
+			last = style;
+		end
+	end
+	if not orig_color then
+		function setstyle(style) end
+	end
 end
-local a="0";
-function setstyle(e)
-e=e or"0";
-if e~=a then
-s("\27["..e.."m");
-a=e;
-end
-end
-if e then
-function setstyle(t)
-t=t or"0";
-if t~=a then
-e.set_consolecolor(i[t]or o);
-a=t;
-end
-end
-if not o then
-function setstyle(e)end
-end
-end
+
 return _M;
-end)
-package.preload['util.uuid']=(function(...)
-local e=math.random;
-local a=tostring;
-local e=os.time;
-local n=os.clock;
-local i=require"util.hashes".sha1;
-module"uuid"
-local t=0;
-local function o()
-local e=e();
-if t>=e then e=t+1;end
-t=e;
-return e;
+ end)
+package.preload['util.uuid'] = (function (...)
+-- Prosody IM
+-- Copyright (C) 2008-2010 Matthew Wild
+-- Copyright (C) 2008-2010 Waqas Hussain
+-- 
+-- This project is MIT/X11 licensed. Please see the
+-- COPYING file in the source package for more information.
+--
+
+
+local m_random = math.random;
+local tostring = tostring;
+local os_time = os.time;
+local os_clock = os.clock;
+local sha1 = require "util.hashes".sha1;
+
+module "uuid"
+
+local last_uniq_time = 0;
+local function uniq_time()
+	local new_uniq_time = os_time();
+	if last_uniq_time >= new_uniq_time then new_uniq_time = last_uniq_time + 1; end
+	last_uniq_time = new_uniq_time;
+	return new_uniq_time;
 end
-local function e(e)
-return i(e..n()..a({}),true);
+
+local function new_random(x)
+	return sha1(x..os_clock()..tostring({}), true);
 end
-local t=e(o());
-local function a(a)
-t=e(t..a);
+
+local buffer = new_random(uniq_time());
+local function _seed(x)
+	buffer = new_random(buffer..x);
 end
-local function e(e)
-if#t<e then a(o());end
-local a=t:sub(0,e);
-t=t:sub(e+1);
-return a;
+local function get_nibbles(n)
+	if #buffer < n then _seed(uniq_time()); end
+	local r = buffer:sub(0, n);
+	buffer = buffer:sub(n+1);
+	return r;
 end
-local function t()
-return("%x"):format(e(1):byte()%4+8);
+local function get_twobits()
+	return ("%x"):format(get_nibbles(1):byte() % 4 + 8);
 end
+
 function generate()
-return e(8).."-"..e(4).."-4"..e(3).."-"..(t())..e(3).."-"..e(12);
+	-- generate RFC 4122 complaint UUIDs (version 4 - random)
+	return get_nibbles(8).."-"..get_nibbles(4).."-4"..get_nibbles(3).."-"..(get_twobits())..get_nibbles(3).."-"..get_nibbles(12);
 end
-seed=a;
+seed = _seed;
+
 return _M;
-end)
-package.preload['net.dns']=(function(...)
-local n=require"socket";
-local j=require"util.timer";
-local e,y=pcall(require,"util.windows");
-local E=(e and y)or os.getenv("WINDIR");
-local c,_,w,a,i=
-coroutine,io,math,string,table;
-local p,h,o,m,r,v,q,x,t,e,z=
-ipairs,next,pairs,print,setmetatable,tostring,assert,error,unpack,select,type;
-local e={
-get=function(t,...)
-local a=e('#',...);
-for a=1,a do
-t=t[e(a,...)];
-if t==nil then break;end
-end
-return t;
-end;
-set=function(t,...)
-local n=e('#',...);
-local s,o=e(n-1,...);
-local a,i;
-for n=1,n-2 do
-local n=e(n,...)
-local e=t[n]
-if o==nil then
-if e==nil then
-return;
-elseif h(e,h(e))then
-a=nil;i=nil;
-elseif a==nil then
-a=t;i=n;
-end
-elseif e==nil then
-e={};
-t[n]=e;
-end
-t=e
-end
-if o==nil and a then
-a[i]=nil;
-else
-t[s]=o;
-return o;
-end
-end;
+ end)
+package.preload['net.dns'] = (function (...)
+-- Prosody IM
+-- This file is included with Prosody IM. It has modifications,
+-- which are hereby placed in the public domain.
+
+
+-- todo: quick (default) header generation
+-- todo: nxdomain, error handling
+-- todo: cache results of encodeName
+
+
+-- reference: http://tools.ietf.org/html/rfc1035
+-- reference: http://tools.ietf.org/html/rfc1876 (LOC)
+
+
+local socket = require "socket";
+local timer = require "util.timer";
+
+local _, windows = pcall(require, "util.windows");
+local is_windows = (_ and windows) or os.getenv("WINDIR");
+
+local coroutine, io, math, string, table =
+      coroutine, io, math, string, table;
+
+local ipairs, next, pairs, print, setmetatable, tostring, assert, error, unpack, select, type=
+      ipairs, next, pairs, print, setmetatable, tostring, assert, error, unpack, select, type;
+
+local ztact = { -- public domain 20080404 lua@ztact.com
+	get = function(parent, ...)
+		local len = select('#', ...);
+		for i=1,len do
+			parent = parent[select(i, ...)];
+			if parent == nil then break; end
+		end
+		return parent;
+	end;
+	set = function(parent, ...)
+		local len = select('#', ...);
+		local key, value = select(len-1, ...);
+		local cutpoint, cutkey;
+
+		for i=1,len-2 do
+			local key = select (i, ...)
+			local child = parent[key]
+
+			if value == nil then
+				if child == nil then
+					return;
+				elseif next(child, next(child)) then
+					cutpoint = nil; cutkey = nil;
+				elseif cutpoint == nil then
+					cutpoint = parent; cutkey = key;
+				end
+			elseif child == nil then
+				child = {};
+				parent[key] = child;
+			end
+			parent = child
+		end
+
+		if value == nil and cutpoint then
+			cutpoint[cutkey] = nil;
+		else
+			parent[key] = value;
+			return value;
+		end
+	end;
 };
-local d,l=e.get,e.set;
-local k=15;
+local get, set = ztact.get, ztact.set;
+
+local default_timeout = 15;
+
+-------------------------------------------------- module dns
 module('dns')
-local t=_M;
-local s=i.insert
-local function u(e)
-return(e-(e%256))/256;
+local dns = _M;
+
+
+-- dns type & class codes ------------------------------ dns type & class codes
+
+
+local append = table.insert
+
+
+local function highbyte(i)    -- - - - - - - - - - - - - - - - - - -  highbyte
+	return (i-(i%0x100))/0x100;
 end
-local function b(e)
-local t={};
-for o,e in o(e)do
-t[o]=e;
-t[e]=e;
-t[a.lower(e)]=e;
+
+
+local function augment (t)    -- - - - - - - - - - - - - - - - - - - -  augment
+	local a = {};
+	for i,s in pairs(t) do
+		a[i] = s;
+		a[s] = s;
+		a[string.lower(s)] = s;
+	end
+	return a;
 end
-return t;
+
+
+local function encode (t)    -- - - - - - - - - - - - - - - - - - - - -  encode
+	local code = {};
+	for i,s in pairs(t) do
+		local word = string.char(highbyte(i), i%0x100);
+		code[i] = word;
+		code[s] = word;
+		code[string.lower(s)] = word;
+	end
+	return code;
 end
-local function f(i)
-local e={};
-for o,i in o(i)do
-local t=a.char(u(o),o%256);
-e[o]=t;
-e[i]=t;
-e[a.lower(i)]=t;
+
+
+dns.types = {
+	'A', 'NS', 'MD', 'MF', 'CNAME', 'SOA', 'MB', 'MG', 'MR', 'NULL', 'WKS',
+	'PTR', 'HINFO', 'MINFO', 'MX', 'TXT',
+	[ 28] = 'AAAA', [ 29] = 'LOC',   [ 33] = 'SRV',
+	[252] = 'AXFR', [253] = 'MAILB', [254] = 'MAILA', [255] = '*' };
+
+
+dns.classes = { 'IN', 'CS', 'CH', 'HS', [255] = '*' };
+
+
+dns.type      = augment (dns.types);
+dns.class     = augment (dns.classes);
+dns.typecode  = encode  (dns.types);
+dns.classcode = encode  (dns.classes);
+
+
+
+local function standardize(qname, qtype, qclass)    -- - - - - - - standardize
+	if string.byte(qname, -1) ~= 0x2E then qname = qname..'.';  end
+	qname = string.lower(qname);
+	return qname, dns.type[qtype or 'A'], dns.class[qclass or 'IN'];
 end
-return e;
+
+
+local function prune(rrs, time, soft)    -- - - - - - - - - - - - - - -  prune
+	time = time or socket.gettime();
+	for i,rr in pairs(rrs) do
+		if rr.tod then
+			-- rr.tod = rr.tod - 50    -- accelerated decripitude
+			rr.ttl = math.floor(rr.tod - time);
+			if rr.ttl <= 0 then
+				table.remove(rrs, i);
+				return prune(rrs, time, soft); -- Re-iterate
+			end
+		elseif soft == 'soft' then    -- What is this?  I forget!
+			assert(rr.ttl == 0);
+			rrs[i] = nil;
+		end
+	end
 end
-t.types={
-'A','NS','MD','MF','CNAME','SOA','MB','MG','MR','NULL','WKS',
-'PTR','HINFO','MINFO','MX','TXT',
-[28]='AAAA',[29]='LOC',[33]='SRV',
-[252]='AXFR',[253]='MAILB',[254]='MAILA',[255]='*'};
-t.classes={'IN','CS','CH','HS',[255]='*'};
-t.type=b(t.types);
-t.class=b(t.classes);
-t.typecode=f(t.types);
-t.classcode=f(t.classes);
-local function g(e,o,i)
-if a.byte(e,-1)~=46 then e=e..'.';end
-e=a.lower(e);
-return e,t.type[o or'A'],t.class[i or'IN'];
+
+
+-- metatables & co. ------------------------------------------ metatables & co.
+
+
+local resolver = {};
+resolver.__index = resolver;
+
+resolver.timeout = default_timeout;
+
+local function default_rr_tostring(rr)
+	local rr_val = rr.type and rr[rr.type:lower()];
+	if type(rr_val) ~= "string" then
+		return "<UNKNOWN RDATA TYPE>";
+	end
+	return rr_val;
 end
-local function b(t,a,s)
-a=a or n.gettime();
-for o,e in o(t)do
-if e.tod then
-e.ttl=w.floor(e.tod-a);
-if e.ttl<=0 then
-i.remove(t,o);
-return b(t,a,s);
-end
-elseif s=='soft'then
-q(e.ttl==0);
-t[o]=nil;
-end
-end
-end
-local e={};
-e.__index=e;
-e.timeout=k;
-local function k(e)
-local e=e.type and e[e.type:lower()];
-if z(e)~="string"then
-return"<UNKNOWN RDATA TYPE>";
-end
-return e;
-end
-local f={
-LOC=e.LOC_tostring;
-MX=function(e)
-return a.format('%2i %s',e.pref,e.mx);
-end;
-SRV=function(e)
-local e=e.srv;
-return a.format('%5d %5d %5d %s',e.priority,e.weight,e.port,e.target);
-end;
+
+local special_tostrings = {
+	LOC = resolver.LOC_tostring;
+	MX  = function (rr)
+		return string.format('%2i %s', rr.pref, rr.mx);
+	end;
+	SRV = function (rr)
+		local s = rr.srv;
+		return string.format('%5d %5d %5d %s', s.priority, s.weight, s.port, s.target);
+	end;
 };
-local q={};
-function q.__tostring(e)
-local t=(f[e.type]or k)(e);
-return a.format('%2s %-5s %6i %-28s %s',e.class,e.type,e.ttl,e.name,t);
-end
-local k={};
-function k.__tostring(t)
-local e={};
-for a,t in o(t)do
-s(e,v(t)..'\n');
-end
-return i.concat(e);
-end
-local f={};
-function f.__tostring(t)
-local a=n.gettime();
-local e={};
-for i,t in o(t)do
-for i,t in o(t)do
-for o,t in o(t)do
-b(t,a);
-s(e,v(t));
-end
-end
-end
-return i.concat(e);
-end
-function e:new()
-local t={active={},cache={},unsorted={}};
-r(t,e);
-r(t.cache,f);
-r(t.unsorted,{__mode='kv'});
-return t;
-end
-function t.random(...)
-w.randomseed(w.floor(1e4*n.gettime()));
-t.random=w.random;
-return t.random(...);
-end
-local function w(e)
-e=e or{};
-e.id=e.id or t.random(0,65535);
-e.rd=e.rd or 1;
-e.tc=e.tc or 0;
-e.aa=e.aa or 0;
-e.opcode=e.opcode or 0;
-e.qr=e.qr or 0;
-e.rcode=e.rcode or 0;
-e.z=e.z or 0;
-e.ra=e.ra or 0;
-e.qdcount=e.qdcount or 1;
-e.ancount=e.ancount or 0;
-e.nscount=e.nscount or 0;
-e.arcount=e.arcount or 0;
-local t=a.char(
-u(e.id),e.id%256,
-e.rd+2*e.tc+4*e.aa+8*e.opcode+128*e.qr,
-e.rcode+16*e.z+128*e.ra,
-u(e.qdcount),e.qdcount%256,
-u(e.ancount),e.ancount%256,
-u(e.nscount),e.nscount%256,
-u(e.arcount),e.arcount%256
-);
-return t,e.id;
-end
-local function u(t)
-local e={};
-for t in a.gmatch(t,'[^.]+')do
-s(e,a.char(a.len(t)));
-s(e,t);
-end
-s(e,a.char(0));
-return i.concat(e);
-end
-local function z(o,a,e)
-o=u(o);
-a=t.typecode[a or'a'];
-e=t.classcode[e or'in'];
-return o..a..e;
-end
-function e:byte(e)
-e=e or 1;
-local t=self.offset;
-local o=t+e-1;
-if o>#self.packet then
-x(a.format('out of bounds: %i>%i',o,#self.packet));
-end
-self.offset=t+e;
-return a.byte(self.packet,t,o);
-end
-function e:word()
-local e,t=self:byte(2);
-return 256*e+t;
-end
-function e:dword()
-local o,a,t,e=self:byte(4);
-return 16777216*o+65536*a+256*t+e;
-end
-function e:sub(e)
-e=e or 1;
-local t=a.sub(self.packet,self.offset,self.offset+e-1);
-self.offset=self.offset+e;
-return t;
-end
-function e:header(t)
-local e=self:word();
-if not self.active[e]and not t then return nil;end
-local e={id=e};
-local t,a=self:byte(2);
-e.rd=t%2;
-e.tc=t/2%2;
-e.aa=t/4%2;
-e.opcode=t/8%16;
-e.qr=t/128;
-e.rcode=a%16;
-e.z=a/16%8;
-e.ra=a/128;
-e.qdcount=self:word();
-e.ancount=self:word();
-e.nscount=self:word();
-e.arcount=self:word();
-for a,t in o(e)do e[a]=t-t%1;end
-return e;
-end
-function e:name()
-local t,a=nil,0;
-local e=self:byte();
-local o={};
-while e>0 do
-if e>=192 then
-a=a+1;
-if a>=20 then x('dns error: 20 pointers');end;
-local e=((e-192)*256)+self:byte();
-t=t or self.offset;
-self.offset=e+1;
-else
-s(o,self:sub(e)..'.');
-end
-e=self:byte();
-end
-self.offset=t or self.offset;
-return i.concat(o);
-end
-function e:question()
-local e={};
-e.name=self:name();
-e.type=t.type[self:word()];
-e.class=t.class[self:word()];
-return e;
-end
-function e:A(e)
-local t,i,o,n=self:byte(4);
-e.a=a.format('%i.%i.%i.%i',t,i,o,n);
-end
-function e:AAAA(a)
-local e={};
-for t=1,a.rdlength,2 do
-local t,a=self:byte(2);
-i.insert(e,("%02x%02x"):format(t,a));
-end
-e=i.concat(e,":"):gsub("%f[%x]0+(%x)","%1");
-local t={};
-for e in e:gmatch(":[0:]+:")do
-i.insert(t,e)
-end
-if#t==0 then
-a.aaaa=e;
-return
-elseif#t>1 then
-i.sort(t,function(e,t)return#e>#t end);
-end
-a.aaaa=e:gsub(t[1],"::",1):gsub("^0::","::"):gsub("::0$","::");
-end
-function e:CNAME(e)
-e.cname=self:name();
-end
-function e:MX(e)
-e.pref=self:word();
-e.mx=self:name();
-end
-function e:LOC_nibble_power()
-local e=self:byte();
-return((e-(e%16))/16)*(10^(e%16));
-end
-function e:LOC(e)
-e.version=self:byte();
-if e.version==0 then
-e.loc=e.loc or{};
-e.loc.size=self:LOC_nibble_power();
-e.loc.horiz_pre=self:LOC_nibble_power();
-e.loc.vert_pre=self:LOC_nibble_power();
-e.loc.latitude=self:dword();
-e.loc.longitude=self:dword();
-e.loc.altitude=self:dword();
-end
-end
-local function u(e,i,t)
-e=e-2147483648;
-if e<0 then i=t;e=-e;end
-local n,t,o;
-o=e%6e4;
-e=(e-o)/6e4;
-t=e%60;
-n=(e-t)/60;
-return a.format('%3d %2d %2.3f %s',n,t,o/1e3,i);
-end
-function e.LOC_tostring(e)
-local t={};
-s(t,a.format(
-'%s    %s    %.2fm %.2fm %.2fm %.2fm',
-u(e.loc.latitude,'N','S'),
-u(e.loc.longitude,'E','W'),
-(e.loc.altitude-1e7)/100,
-e.loc.size/100,
-e.loc.horiz_pre/100,
-e.loc.vert_pre/100
-));
-return i.concat(t);
-end
-function e:NS(e)
-e.ns=self:name();
-end
-function e:SOA(e)
-end
-function e:SRV(e)
-e.srv={};
-e.srv.priority=self:word();
-e.srv.weight=self:word();
-e.srv.port=self:word();
-e.srv.target=self:name();
-end
-function e:PTR(e)
-e.ptr=self:name();
-end
-function e:TXT(e)
-e.txt=self:sub(self:byte());
-end
-function e:rr()
-local e={};
-r(e,q);
-e.name=self:name(self);
-e.type=t.type[self:word()]or e.type;
-e.class=t.class[self:word()]or e.class;
-e.ttl=65536*self:word()+self:word();
-e.rdlength=self:word();
-if e.ttl<=0 then
-e.tod=self.time+30;
-else
-e.tod=self.time+e.ttl;
-end
-local a=self.offset;
-local t=self[t.type[e.type]];
-if t then t(self,e);end
-self.offset=a;
-e.rdata=self:sub(e.rdlength);
-return e;
-end
-function e:rrs(t)
-local e={};
-for t=1,t do s(e,self:rr());end
-return e;
-end
-function e:decode(t,o)
-self.packet,self.offset=t,1;
-local t=self:header(o);
-if not t then return nil;end
-local t={header=t};
-t.question={};
-local i=self.offset;
-for e=1,t.header.qdcount do
-s(t.question,self:question());
-end
-t.question.raw=a.sub(self.packet,i,self.offset-1);
-if not o then
-if not self.active[t.header.id]or not self.active[t.header.id][t.question.raw]then
-return nil;
-end
-end
-t.answer=self:rrs(t.header.ancount);
-t.authority=self:rrs(t.header.nscount);
-t.additional=self:rrs(t.header.arcount);
-return t;
-end
-e.delays={1,3};
-function e:addnameserver(e)
-self.server=self.server or{};
-s(self.server,e);
-end
-function e:setnameserver(e)
-self.server={};
-self:addnameserver(e);
-end
-function e:adddefaultnameservers()
-if E then
-if y and y.get_nameservers then
-for t,e in p(y.get_nameservers())do
-self:addnameserver(e);
-end
-end
-if not self.server or#self.server==0 then
-self:addnameserver("208.67.222.222");
-self:addnameserver("208.67.220.220");
-end
-else
-local e=_.open("/etc/resolv.conf");
-if e then
-for e in e:lines()do
-e=e:gsub("#.*$","")
-:match('^%s*nameserver%s+(.*)%s*$');
-if e then
-e:gsub("%f[%d.](%d+%.%d+%.%d+%.%d+)%f[^%d.]",function(e)
-self:addnameserver(e)
-end);
-end
-end
-end
-if not self.server or#self.server==0 then
-self:addnameserver("127.0.0.1");
-end
-end
-end
-function e:getsocket(t)
-self.socket=self.socket or{};
-self.socketset=self.socketset or{};
-local e=self.socket[t];
-if e then return e;end
-local a;
-e,a=n.udp();
-if not e then
-return nil,a;
-end
-if self.socket_wrapper then e=self.socket_wrapper(e,self);end
-e:settimeout(0);
-e:setsockname('*',0);
-e:setpeername(self.server[t],53);
-self.socket[t]=e;
-self.socketset[e]=t;
-return e;
-end
-function e:voidsocket(e)
-if self.socket[e]then
-self.socketset[self.socket[e]]=nil;
-self.socket[e]=nil;
-elseif self.socketset[e]then
-self.socket[self.socketset[e]]=nil;
-self.socketset[e]=nil;
-end
-end
-function e:socket_wrapper_set(e)
-self.socket_wrapper=e;
-end
-function e:closeall()
-for t,e in p(self.socket)do
-self.socket[t]=nil;
-self.socketset[e]=nil;
-e:close();
-end
-end
-function e:remember(e,t)
-local a,i,o=g(e.name,e.type,e.class);
-if t~='*'then
-t=i;
-local t=d(self.cache,o,'*',a);
-if t then s(t,e);end
-end
-self.cache=self.cache or r({},f);
-local a=d(self.cache,o,t,a)or
-l(self.cache,o,t,a,r({},k));
-s(a,e);
-if t=='MX'then self.unsorted[a]=true;end
-end
-local function s(t,e)
-return(t.pref==e.pref)and(t.mx<e.mx)or(t.pref<e.pref);
-end
-function e:peek(a,t,o)
-a,t,o=g(a,t,o);
-local e=d(self.cache,o,t,a);
-if not e then return nil;end
-if b(e,n.gettime())and t=='*'or not h(e)then
-l(self.cache,o,t,a,nil);
-return nil;
-end
-if self.unsorted[e]then i.sort(e,s);end
-return e;
-end
-function e:purge(e)
-if e=='soft'then
-self.time=n.gettime();
-for t,e in o(self.cache or{})do
-for t,e in o(e)do
-for t,e in o(e)do
-b(e,self.time,'soft')
-end
-end
-end
-else self.cache=r({},f);end
-end
-function e:query(t,e,a)
-t,e,a=g(t,e,a)
-if not self.server then self:adddefaultnameservers();end
-local s=z(t,e,a);
-local o=self:peek(t,e,a);
-if o then return o;end
-local i,o=w();
-local i={
-packet=i..s,
-server=self.best_server,
-delay=1,
-retry=n.gettime()+self.delays[1]
+
+local rr_metatable = {};   -- - - - - - - - - - - - - - - - - - -  rr_metatable
+function rr_metatable.__tostring(rr)
+	local rr_string = (special_tostrings[rr.type] or default_rr_tostring)(rr);
+	return string.format('%2s %-5s %6i %-28s %s', rr.class, rr.type, rr.ttl, rr.name, rr_string);
+end
+
+
+local rrs_metatable = {};    -- - - - - - - - - - - - - - - - - -  rrs_metatable
+function rrs_metatable.__tostring(rrs)
+	local t = {};
+	for i,rr in pairs(rrs) do
+		append(t, tostring(rr)..'\n');
+	end
+	return table.concat(t);
+end
+
+
+local cache_metatable = {};    -- - - - - - - - - - - - - - - -  cache_metatable
+function cache_metatable.__tostring(cache)
+	local time = socket.gettime();
+	local t = {};
+	for class,types in pairs(cache) do
+		for type,names in pairs(types) do
+			for name,rrs in pairs(names) do
+				prune(rrs, time);
+				append(t, tostring(rrs));
+			end
+		end
+	end
+	return table.concat(t);
+end
+
+
+function resolver:new()    -- - - - - - - - - - - - - - - - - - - - - resolver
+	local r = { active = {}, cache = {}, unsorted = {} };
+	setmetatable(r, resolver);
+	setmetatable(r.cache, cache_metatable);
+	setmetatable(r.unsorted, { __mode = 'kv' });
+	return r;
+end
+
+
+-- packet layer -------------------------------------------------- packet layer
+
+
+function dns.random(...)    -- - - - - - - - - - - - - - - - - - -  dns.random
+	math.randomseed(math.floor(10000*socket.gettime()));
+	dns.random = math.random;
+	return dns.random(...);
+end
+
+
+local function encodeHeader(o)    -- - - - - - - - - - - - - - -  encodeHeader
+	o = o or {};
+	o.id = o.id or dns.random(0, 0xffff); -- 16b	(random) id
+
+	o.rd = o.rd or 1;		--  1b  1 recursion desired
+	o.tc = o.tc or 0;		--  1b	1 truncated response
+	o.aa = o.aa or 0;		--  1b	1 authoritative response
+	o.opcode = o.opcode or 0;	--  4b	0 query
+				--  1 inverse query
+				--	2 server status request
+				--	3-15 reserved
+	o.qr = o.qr or 0;		--  1b	0 query, 1 response
+
+	o.rcode = o.rcode or 0;	--  4b  0 no error
+				--	1 format error
+				--	2 server failure
+				--	3 name error
+				--	4 not implemented
+				--	5 refused
+				--	6-15 reserved
+	o.z = o.z  or 0;		--  3b  0 resvered
+	o.ra = o.ra or 0;		--  1b  1 recursion available
+
+	o.qdcount = o.qdcount or 1;	-- 16b	number of question RRs
+	o.ancount = o.ancount or 0;	-- 16b	number of answers RRs
+	o.nscount = o.nscount or 0;	-- 16b	number of nameservers RRs
+	o.arcount = o.arcount or 0;	-- 16b  number of additional RRs
+
+	-- string.char() rounds, so prevent roundup with -0.4999
+	local header = string.char(
+		highbyte(o.id), o.id %0x100,
+		o.rd + 2*o.tc + 4*o.aa + 8*o.opcode + 128*o.qr,
+		o.rcode + 16*o.z + 128*o.ra,
+		highbyte(o.qdcount),  o.qdcount %0x100,
+		highbyte(o.ancount),  o.ancount %0x100,
+		highbyte(o.nscount),  o.nscount %0x100,
+		highbyte(o.arcount),  o.arcount %0x100
+	);
+
+	return header, o.id;
+end
+
+
+local function encodeName(name)    -- - - - - - - - - - - - - - - - encodeName
+	local t = {};
+	for part in string.gmatch(name, '[^.]+') do
+		append(t, string.char(string.len(part)));
+		append(t, part);
+	end
+	append(t, string.char(0));
+	return table.concat(t);
+end
+
+
+local function encodeQuestion(qname, qtype, qclass)    -- - - - encodeQuestion
+	qname  = encodeName(qname);
+	qtype  = dns.typecode[qtype or 'a'];
+	qclass = dns.classcode[qclass or 'in'];
+	return qname..qtype..qclass;
+end
+
+
+function resolver:byte(len)    -- - - - - - - - - - - - - - - - - - - - - byte
+	len = len or 1;
+	local offset = self.offset;
+	local last = offset + len - 1;
+	if last > #self.packet then
+		error(string.format('out of bounds: %i>%i', last, #self.packet));
+	end
+	self.offset = offset + len;
+	return string.byte(self.packet, offset, last);
+end
+
+
+function resolver:word()    -- - - - - - - - - - - - - - - - - - - - - -  word
+	local b1, b2 = self:byte(2);
+	return 0x100*b1 + b2;
+end
+
+
+function resolver:dword ()    -- - - - - - - - - - - - - - - - - - - - -  dword
+	local b1, b2, b3, b4 = self:byte(4);
+	--print('dword', b1, b2, b3, b4);
+	return 0x1000000*b1 + 0x10000*b2 + 0x100*b3 + b4;
+end
+
+
+function resolver:sub(len)    -- - - - - - - - - - - - - - - - - - - - - - sub
+	len = len or 1;
+	local s = string.sub(self.packet, self.offset, self.offset + len - 1);
+	self.offset = self.offset + len;
+	return s;
+end
+
+
+function resolver:header(force)    -- - - - - - - - - - - - - - - - - - header
+	local id = self:word();
+	--print(string.format(':header  id  %x', id));
+	if not self.active[id] and not force then return nil; end
+
+	local h = { id = id };
+
+	local b1, b2 = self:byte(2);
+
+	h.rd      = b1 %2;
+	h.tc      = b1 /2%2;
+	h.aa      = b1 /4%2;
+	h.opcode  = b1 /8%16;
+	h.qr      = b1 /128;
+
+	h.rcode   = b2 %16;
+	h.z       = b2 /16%8;
+	h.ra      = b2 /128;
+
+	h.qdcount = self:word();
+	h.ancount = self:word();
+	h.nscount = self:word();
+	h.arcount = self:word();
+
+	for k,v in pairs(h) do h[k] = v-v%1; end
+
+	return h;
+end
+
+
+function resolver:name()    -- - - - - - - - - - - - - - - - - - - - - -  name
+	local remember, pointers = nil, 0;
+	local len = self:byte();
+	local n = {};
+	while len > 0 do
+		if len >= 0xc0 then    -- name is "compressed"
+			pointers = pointers + 1;
+			if pointers >= 20 then error('dns error: 20 pointers'); end;
+			local offset = ((len-0xc0)*0x100) + self:byte();
+			remember = remember or self.offset;
+			self.offset = offset + 1;    -- +1 for lua
+		else    -- name is not compressed
+			append(n, self:sub(len)..'.');
+		end
+		len = self:byte();
+	end
+	self.offset = remember or self.offset;
+	return table.concat(n);
+end
+
+
+function resolver:question()    -- - - - - - - - - - - - - - - - - -  question
+	local q = {};
+	q.name  = self:name();
+	q.type  = dns.type[self:word()];
+	q.class = dns.class[self:word()];
+	return q;
+end
+
+
+function resolver:A(rr)    -- - - - - - - - - - - - - - - - - - - - - - - -  A
+	local b1, b2, b3, b4 = self:byte(4);
+	rr.a = string.format('%i.%i.%i.%i', b1, b2, b3, b4);
+end
+
+function resolver:AAAA(rr)
+	local addr = {};
+	for i = 1, rr.rdlength, 2 do
+		local b1, b2 = self:byte(2);
+		table.insert(addr, ("%02x%02x"):format(b1, b2));
+	end
+	addr = table.concat(addr, ":"):gsub("%f[%x]0+(%x)","%1");
+	local zeros = {};
+	for item in addr:gmatch(":[0:]+:") do
+		table.insert(zeros, item)
+	end
+	if #zeros == 0 then
+		rr.aaaa = addr;
+		return
+	elseif #zeros > 1 then
+		table.sort(zeros, function(a, b) return #a > #b end);
+	end
+	rr.aaaa = addr:gsub(zeros[1], "::", 1):gsub("^0::", "::"):gsub("::0$", "::");
+end
+
+function resolver:CNAME(rr)    -- - - - - - - - - - - - - - - - - - - -  CNAME
+	rr.cname = self:name();
+end
+
+
+function resolver:MX(rr)    -- - - - - - - - - - - - - - - - - - - - - - -  MX
+	rr.pref = self:word();
+	rr.mx   = self:name();
+end
+
+
+function resolver:LOC_nibble_power()    -- - - - - - - - - -  LOC_nibble_power
+	local b = self:byte();
+	--print('nibbles', ((b-(b%0x10))/0x10), (b%0x10));
+	return ((b-(b%0x10))/0x10) * (10^(b%0x10));
+end
+
+
+function resolver:LOC(rr)    -- - - - - - - - - - - - - - - - - - - - - -  LOC
+	rr.version = self:byte();
+	if rr.version == 0 then
+		rr.loc           = rr.loc or {};
+		rr.loc.size      = self:LOC_nibble_power();
+		rr.loc.horiz_pre = self:LOC_nibble_power();
+		rr.loc.vert_pre  = self:LOC_nibble_power();
+		rr.loc.latitude  = self:dword();
+		rr.loc.longitude = self:dword();
+		rr.loc.altitude  = self:dword();
+	end
+end
+
+
+local function LOC_tostring_degrees(f, pos, neg)    -- - - - - - - - - - - - -
+	f = f - 0x80000000;
+	if f < 0 then pos = neg; f = -f; end
+	local deg, min, msec;
+	msec = f%60000;
+	f    = (f-msec)/60000;
+	min  = f%60;
+	deg = (f-min)/60;
+	return string.format('%3d %2d %2.3f %s', deg, min, msec/1000, pos);
+end
+
+
+function resolver.LOC_tostring(rr)    -- - - - - - - - - - - - -  LOC_tostring
+	local t = {};
+
+	--[[
+	for k,name in pairs { 'size', 'horiz_pre', 'vert_pre', 'latitude', 'longitude', 'altitude' } do
+		append(t, string.format('%4s%-10s: %12.0f\n', '', name, rr.loc[name]));
+	end
+	--]]
+
+	append(t, string.format(
+		'%s    %s    %.2fm %.2fm %.2fm %.2fm',
+		LOC_tostring_degrees (rr.loc.latitude, 'N', 'S'),
+		LOC_tostring_degrees (rr.loc.longitude, 'E', 'W'),
+		(rr.loc.altitude - 10000000) / 100,
+		rr.loc.size / 100,
+		rr.loc.horiz_pre / 100,
+		rr.loc.vert_pre / 100
+	));
+
+	return table.concat(t);
+end
+
+
+function resolver:NS(rr)    -- - - - - - - - - - - - - - - - - - - - - - -  NS
+	rr.ns = self:name();
+end
+
+
+function resolver:SOA(rr)    -- - - - - - - - - - - - - - - - - - - - - -  SOA
+end
+
+
+function resolver:SRV(rr)    -- - - - - - - - - - - - - - - - - - - - - -  SRV
+	  rr.srv = {};
+	  rr.srv.priority = self:word();
+	  rr.srv.weight   = self:word();
+	  rr.srv.port     = self:word();
+	  rr.srv.target   = self:name();
+end
+
+function resolver:PTR(rr)
+	rr.ptr = self:name();
+end
+
+function resolver:TXT(rr)    -- - - - - - - - - - - - - - - - - - - - - -  TXT
+	rr.txt = self:sub (self:byte());
+end
+
+
+function resolver:rr()    -- - - - - - - - - - - - - - - - - - - - - - - -  rr
+	local rr = {};
+	setmetatable(rr, rr_metatable);
+	rr.name     = self:name(self);
+	rr.type     = dns.type[self:word()] or rr.type;
+	rr.class    = dns.class[self:word()] or rr.class;
+	rr.ttl      = 0x10000*self:word() + self:word();
+	rr.rdlength = self:word();
+
+	if rr.ttl <= 0 then
+		rr.tod = self.time + 30;
+	else
+		rr.tod = self.time + rr.ttl;
+	end
+
+	local remember = self.offset;
+	local rr_parser = self[dns.type[rr.type]];
+	if rr_parser then rr_parser(self, rr); end
+	self.offset = remember;
+	rr.rdata = self:sub(rr.rdlength);
+	return rr;
+end
+
+
+function resolver:rrs (count)    -- - - - - - - - - - - - - - - - - - - - - rrs
+	local rrs = {};
+	for i = 1,count do append(rrs, self:rr()); end
+	return rrs;
+end
+
+
+function resolver:decode(packet, force)    -- - - - - - - - - - - - - - decode
+	self.packet, self.offset = packet, 1;
+	local header = self:header(force);
+	if not header then return nil; end
+	local response = { header = header };
+
+	response.question = {};
+	local offset = self.offset;
+	for i = 1,response.header.qdcount do
+		append(response.question, self:question());
+	end
+	response.question.raw = string.sub(self.packet, offset, self.offset - 1);
+
+	if not force then
+		if not self.active[response.header.id] or not self.active[response.header.id][response.question.raw] then
+			return nil;
+		end
+	end
+
+	response.answer     = self:rrs(response.header.ancount);
+	response.authority  = self:rrs(response.header.nscount);
+	response.additional = self:rrs(response.header.arcount);
+
+	return response;
+end
+
+
+-- socket layer -------------------------------------------------- socket layer
+
+
+resolver.delays = { 1, 3 };
+
+
+function resolver:addnameserver(address)    -- - - - - - - - - - addnameserver
+	self.server = self.server or {};
+	append(self.server, address);
+end
+
+
+function resolver:setnameserver(address)    -- - - - - - - - - - setnameserver
+	self.server = {};
+	self:addnameserver(address);
+end
+
+
+function resolver:adddefaultnameservers()    -- - - - -  adddefaultnameservers
+	if is_windows then
+		if windows and windows.get_nameservers then
+			for _, server in ipairs(windows.get_nameservers()) do
+				self:addnameserver(server);
+			end
+		end
+		if not self.server or #self.server == 0 then
+			-- TODO log warning about no nameservers, adding opendns servers as fallback
+			self:addnameserver("208.67.222.222");
+			self:addnameserver("208.67.220.220");
+		end
+	else -- posix
+		local resolv_conf = io.open("/etc/resolv.conf");
+		if resolv_conf then
+			for line in resolv_conf:lines() do
+				line = line:gsub("#.*$", "")
+					:match('^%s*nameserver%s+(.*)%s*$');
+				if line then
+					line:gsub("%f[%d.](%d+%.%d+%.%d+%.%d+)%f[^%d.]", function (address)
+						self:addnameserver(address)
+					end);
+				end
+			end
+		end
+		if not self.server or #self.server == 0 then
+			-- TODO log warning about no nameservers, adding localhost as the default nameserver
+			self:addnameserver("127.0.0.1");
+		end
+	end
+end
+
+
+function resolver:getsocket(servernum)    -- - - - - - - - - - - - - getsocket
+	self.socket = self.socket or {};
+	self.socketset = self.socketset or {};
+
+	local sock = self.socket[servernum];
+	if sock then return sock; end
+
+	local err;
+	sock, err = socket.udp();
+	if not sock then
+		return nil, err;
+	end
+	if self.socket_wrapper then sock = self.socket_wrapper(sock, self); end
+	sock:settimeout(0);
+	-- todo: attempt to use a random port, fallback to 0
+	sock:setsockname('*', 0);
+	sock:setpeername(self.server[servernum], 53);
+	self.socket[servernum] = sock;
+	self.socketset[sock] = servernum;
+	return sock;
+end
+
+function resolver:voidsocket(sock)
+	if self.socket[sock] then
+		self.socketset[self.socket[sock]] = nil;
+		self.socket[sock] = nil;
+	elseif self.socketset[sock] then
+		self.socket[self.socketset[sock]] = nil;
+		self.socketset[sock] = nil;
+	end
+end
+
+function resolver:socket_wrapper_set(func)  -- - - - - - - socket_wrapper_set
+	self.socket_wrapper = func;
+end
+
+
+function resolver:closeall ()    -- - - - - - - - - - - - - - - - - -  closeall
+	for i,sock in ipairs(self.socket) do
+		self.socket[i] = nil;
+		self.socketset[sock] = nil;
+		sock:close();
+	end
+end
+
+
+function resolver:remember(rr, type)    -- - - - - - - - - - - - - -  remember
+	--print ('remember', type, rr.class, rr.type, rr.name)
+	local qname, qtype, qclass = standardize(rr.name, rr.type, rr.class);
+
+	if type ~= '*' then
+		type = qtype;
+		local all = get(self.cache, qclass, '*', qname);
+		--print('remember all', all);
+		if all then append(all, rr); end
+	end
+
+	self.cache = self.cache or setmetatable({}, cache_metatable);
+	local rrs = get(self.cache, qclass, type, qname) or
+		set(self.cache, qclass, type, qname, setmetatable({}, rrs_metatable));
+	append(rrs, rr);
+
+	if type == 'MX' then self.unsorted[rrs] = true; end
+end
+
+
+local function comp_mx(a, b)    -- - - - - - - - - - - - - - - - - - - comp_mx
+	return (a.pref == b.pref) and (a.mx < b.mx) or (a.pref < b.pref);
+end
+
+
+function resolver:peek (qname, qtype, qclass)    -- - - - - - - - - - - -  peek
+	qname, qtype, qclass = standardize(qname, qtype, qclass);
+	local rrs = get(self.cache, qclass, qtype, qname);
+	if not rrs then return nil; end
+	if prune(rrs, socket.gettime()) and qtype == '*' or not next(rrs) then
+		set(self.cache, qclass, qtype, qname, nil);
+		return nil;
+	end
+	if self.unsorted[rrs] then table.sort (rrs, comp_mx); end
+	return rrs;
+end
+
+
+function resolver:purge(soft)    -- - - - - - - - - - - - - - - - - - -  purge
+	if soft == 'soft' then
+		self.time = socket.gettime();
+		for class,types in pairs(self.cache or {}) do
+			for type,names in pairs(types) do
+				for name,rrs in pairs(names) do
+					prune(rrs, self.time, 'soft')
+				end
+			end
+		end
+	else self.cache = setmetatable({}, cache_metatable); end
+end
+
+
+function resolver:query(qname, qtype, qclass)    -- - - - - - - - - - -- query
+	qname, qtype, qclass = standardize(qname, qtype, qclass)
+
+	if not self.server then self:adddefaultnameservers(); end
+
+	local question = encodeQuestion(qname, qtype, qclass);
+	local peek = self:peek (qname, qtype, qclass);
+	if peek then return peek; end
+
+	local header, id = encodeHeader();
+	--print ('query  id', id, qclass, qtype, qname)
+	local o = {
+		packet = header..question,
+		server = self.best_server,
+		delay  = 1,
+		retry  = socket.gettime() + self.delays[1]
+	};
+
+	-- remember the query
+	self.active[id] = self.active[id] or {};
+	self.active[id][question] = o;
+
+	-- remember which coroutine wants the answer
+	local co = coroutine.running();
+	if co then
+		set(self.wanted, qclass, qtype, qname, co, true);
+		--set(self.yielded, co, qclass, qtype, qname, true);
+	end
+
+	local conn, err = self:getsocket(o.server)
+	if not conn then
+		return nil, err;
+	end
+	conn:send (o.packet)
+	
+	if timer and self.timeout then
+		local num_servers = #self.server;
+		local i = 1;
+		timer.add_task(self.timeout, function ()
+			if get(self.wanted, qclass, qtype, qname, co) then
+				if i < num_servers then
+					i = i + 1;
+					self:servfail(conn);
+					o.server = self.best_server;
+					conn, err = self:getsocket(o.server);
+					if conn then
+						conn:send(o.packet);
+						return self.timeout;
+					end
+				end
+				-- Tried everything, failed
+				self:cancel(qclass, qtype, qname, co, true);
+			end
+		end)
+	end
+	return true;
+end
+
+function resolver:servfail(sock)
+	-- Resend all queries for this server
+
+	local num = self.socketset[sock]
+
+	-- Socket is dead now
+	self:voidsocket(sock);
+
+	-- Find all requests to the down server, and retry on the next server
+	self.time = socket.gettime();
+	for id,queries in pairs(self.active) do
+		for question,o in pairs(queries) do
+			if o.server == num then -- This request was to the broken server
+				o.server = o.server + 1 -- Use next server
+				if o.server > #self.server then
+					o.server = 1;
+				end
+
+				o.retries = (o.retries or 0) + 1;
+				if o.retries >= #self.server then
+					--print('timeout');
+					queries[question] = nil;
+				else
+					local _a = self:getsocket(o.server);
+					if _a then _a:send(o.packet); end
+				end
+			end
+		end
+	end
+
+	if num == self.best_server then
+		self.best_server = self.best_server + 1;
+		if self.best_server > #self.server then
+			-- Exhausted all servers, try first again
+			self.best_server = 1;
+		end
+	end
+end
+
+function resolver:settimeout(seconds)
+	self.timeout = seconds;
+end
+
+function resolver:receive(rset)    -- - - - - - - - - - - - - - - - -  receive
+	--print('receive');  print(self.socket);
+	self.time = socket.gettime();
+	rset = rset or self.socket;
+
+	local response;
+	for i,sock in pairs(rset) do
+
+		if self.socketset[sock] then
+			local packet = sock:receive();
+			if packet then
+				response = self:decode(packet);
+				if response and self.active[response.header.id]
+					and self.active[response.header.id][response.question.raw] then
+					--print('received response');
+					--self.print(response);
+
+					for j,rr in pairs(response.answer) do
+						if rr.name:sub(-#response.question[1].name, -1) == response.question[1].name then
+							self:remember(rr, response.question[1].type)
+						end
+					end
+
+					-- retire the query
+					local queries = self.active[response.header.id];
+					queries[response.question.raw] = nil;
+					
+					if not next(queries) then self.active[response.header.id] = nil; end
+					if not next(self.active) then self:closeall(); end
+
+					-- was the query on the wanted list?
+					local q = response.question[1];
+					local cos = get(self.wanted, q.class, q.type, q.name);
+					if cos then
+						for co in pairs(cos) do
+							set(self.yielded, co, q.class, q.type, q.name, nil);
+							if coroutine.status(co) == "suspended" then coroutine.resume(co); end
+						end
+						set(self.wanted, q.class, q.type, q.name, nil);
+					end
+				end
+			end
+		end
+	end
+
+	return response;
+end
+
+
+function resolver:feed(sock, packet, force)
+	--print('receive'); print(self.socket);
+	self.time = socket.gettime();
+
+	local response = self:decode(packet, force);
+	if response and self.active[response.header.id]
+		and self.active[response.header.id][response.question.raw] then
+		--print('received response');
+		--self.print(response);
+
+		for j,rr in pairs(response.answer) do
+			self:remember(rr, response.question[1].type);
+		end
+
+		-- retire the query
+		local queries = self.active[response.header.id];
+		queries[response.question.raw] = nil;
+		if not next(queries) then self.active[response.header.id] = nil; end
+		if not next(self.active) then self:closeall(); end
+
+		-- was the query on the wanted list?
+		local q = response.question[1];
+		if q then
+			local cos = get(self.wanted, q.class, q.type, q.name);
+			if cos then
+				for co in pairs(cos) do
+					set(self.yielded, co, q.class, q.type, q.name, nil);
+					if coroutine.status(co) == "suspended" then coroutine.resume(co); end
+				end
+				set(self.wanted, q.class, q.type, q.name, nil);
+			end
+		end
+	end
+
+	return response;
+end
+
+function resolver:cancel(qclass, qtype, qname, co, call_handler)
+	local cos = get(self.wanted, qclass, qtype, qname);
+	if cos then
+		if call_handler then
+			coroutine.resume(co);
+		end
+		cos[co] = nil;
+	end
+end
+
+function resolver:pulse()    -- - - - - - - - - - - - - - - - - - - - -  pulse
+	--print(':pulse');
+	while self:receive() do end
+	if not next(self.active) then return nil; end
+
+	self.time = socket.gettime();
+	for id,queries in pairs(self.active) do
+		for question,o in pairs(queries) do
+			if self.time >= o.retry then
+
+				o.server = o.server + 1;
+				if o.server > #self.server then
+					o.server = 1;
+					o.delay = o.delay + 1;
+				end
+
+				if o.delay > #self.delays then
+					--print('timeout');
+					queries[question] = nil;
+					if not next(queries) then self.active[id] = nil; end
+					if not next(self.active) then return nil; end
+				else
+					--print('retry', o.server, o.delay);
+					local _a = self.socket[o.server];
+					if _a then _a:send(o.packet); end
+					o.retry = self.time + self.delays[o.delay];
+				end
+			end
+		end
+	end
+
+	if next(self.active) then return true; end
+	return nil;
+end
+
+
+function resolver:lookup(qname, qtype, qclass)    -- - - - - - - - - -  lookup
+	self:query (qname, qtype, qclass)
+	while self:pulse() do
+		local recvt = {}
+		for i, s in ipairs(self.socket) do
+			recvt[i] = s
+		end
+		socket.select(recvt, nil, 4)
+	end
+	--print(self.cache);
+	return self:peek(qname, qtype, qclass);
+end
+
+function resolver:lookupex(handler, qname, qtype, qclass)    -- - - - - - - - - -  lookup
+	return self:peek(qname, qtype, qclass) or self:query(qname, qtype, qclass);
+end
+
+function resolver:tohostname(ip)
+	return dns.lookup(ip:gsub("(%d+)%.(%d+)%.(%d+)%.(%d+)", "%4.%3.%2.%1.in-addr.arpa."), "PTR");
+end
+
+--print ---------------------------------------------------------------- print
+
+
+local hints = {    -- - - - - - - - - - - - - - - - - - - - - - - - - - - hints
+	qr = { [0]='query', 'response' },
+	opcode = { [0]='query', 'inverse query', 'server status request' },
+	aa = { [0]='non-authoritative', 'authoritative' },
+	tc = { [0]='complete', 'truncated' },
+	rd = { [0]='recursion not desired', 'recursion desired' },
+	ra = { [0]='recursion not available', 'recursion available' },
+	z  = { [0]='(reserved)' },
+	rcode = { [0]='no error', 'format error', 'server failure', 'name error', 'not implemented' },
+
+	type = dns.type,
+	class = dns.class
 };
-self.active[o]=self.active[o]or{};
-self.active[o][s]=i;
-local n=c.running();
-if n then
-l(self.wanted,a,e,t,n,true);
-end
-local o,h=self:getsocket(i.server)
-if not o then
-return nil,h;
-end
-o:send(i.packet)
-if j and self.timeout then
-local r=#self.server;
-local s=1;
-j.add_task(self.timeout,function()
-if d(self.wanted,a,e,t,n)then
-if s<r then
-s=s+1;
-self:servfail(o);
-i.server=self.best_server;
-o,h=self:getsocket(i.server);
-if o then
-o:send(i.packet);
-return self.timeout;
-end
-end
-self:cancel(a,e,t,n,true);
-end
-end)
-end
-return true;
-end
-function e:servfail(e)
-local a=self.socketset[e]
-self:voidsocket(e);
-self.time=n.gettime();
-for e,t in o(self.active)do
-for o,e in o(t)do
-if e.server==a then
-e.server=e.server+1
-if e.server>#self.server then
-e.server=1;
-end
-e.retries=(e.retries or 0)+1;
-if e.retries>=#self.server then
-t[o]=nil;
-else
-local t=self:getsocket(e.server);
-if t then t:send(e.packet);end
-end
-end
-end
-end
-if a==self.best_server then
-self.best_server=self.best_server+1;
-if self.best_server>#self.server then
-self.best_server=1;
-end
-end
-end
-function e:settimeout(e)
-self.timeout=e;
-end
-function e:receive(t)
-self.time=n.gettime();
-t=t or self.socket;
-local e;
-for a,t in o(t)do
-if self.socketset[t]then
-local t=t:receive();
-if t then
-e=self:decode(t);
-if e and self.active[e.header.id]
-and self.active[e.header.id][e.question.raw]then
-for a,t in o(e.answer)do
-if t.name:sub(-#e.question[1].name,-1)==e.question[1].name then
-self:remember(t,e.question[1].type)
-end
-end
-local t=self.active[e.header.id];
-t[e.question.raw]=nil;
-if not h(t)then self.active[e.header.id]=nil;end
-if not h(self.active)then self:closeall();end
-local e=e.question[1];
-local t=d(self.wanted,e.class,e.type,e.name);
-if t then
-for t in o(t)do
-l(self.yielded,t,e.class,e.type,e.name,nil);
-if c.status(t)=="suspended"then c.resume(t);end
-end
-l(self.wanted,e.class,e.type,e.name,nil);
-end
-end
-end
-end
-end
-return e;
-end
-function e:feed(a,t,e)
-self.time=n.gettime();
-local e=self:decode(t,e);
-if e and self.active[e.header.id]
-and self.active[e.header.id][e.question.raw]then
-for a,t in o(e.answer)do
-self:remember(t,e.question[1].type);
-end
-local t=self.active[e.header.id];
-t[e.question.raw]=nil;
-if not h(t)then self.active[e.header.id]=nil;end
-if not h(self.active)then self:closeall();end
-local e=e.question[1];
-if e then
-local t=d(self.wanted,e.class,e.type,e.name);
-if t then
-for t in o(t)do
-l(self.yielded,t,e.class,e.type,e.name,nil);
-if c.status(t)=="suspended"then c.resume(t);end
-end
-l(self.wanted,e.class,e.type,e.name,nil);
-end
-end
-end
-return e;
-end
-function e:cancel(t,a,i,e,o)
-local t=d(self.wanted,t,a,i);
-if t then
-if o then
-c.resume(e);
-end
-t[e]=nil;
-end
-end
-function e:pulse()
-while self:receive()do end
-if not h(self.active)then return nil;end
-self.time=n.gettime();
-for i,t in o(self.active)do
-for a,e in o(t)do
-if self.time>=e.retry then
-e.server=e.server+1;
-if e.server>#self.server then
-e.server=1;
-e.delay=e.delay+1;
-end
-if e.delay>#self.delays then
-t[a]=nil;
-if not h(t)then self.active[i]=nil;end
-if not h(self.active)then return nil;end
-else
-local t=self.socket[e.server];
-if t then t:send(e.packet);end
-e.retry=self.time+self.delays[e.delay];
-end
-end
-end
-end
-if h(self.active)then return true;end
-return nil;
-end
-function e:lookup(e,t,a)
-self:query(e,t,a)
-while self:pulse()do
-local e={}
-for t,a in p(self.socket)do
-e[t]=a
-end
-n.select(e,nil,4)
-end
-return self:peek(e,t,a);
-end
-function e:lookupex(o,t,e,a)
-return self:peek(t,e,a)or self:query(t,e,a);
-end
-function e:tohostname(e)
-return t.lookup(e:gsub("(%d+)%.(%d+)%.(%d+)%.(%d+)","%4.%3.%2.%1.in-addr.arpa."),"PTR");
-end
-local i={
-qr={[0]='query','response'},
-opcode={[0]='query','inverse query','server status request'},
-aa={[0]='non-authoritative','authoritative'},
-tc={[0]='complete','truncated'},
-rd={[0]='recursion not desired','recursion desired'},
-ra={[0]='recursion not available','recursion available'},
-z={[0]='(reserved)'},
-rcode={[0]='no error','format error','server failure','name error','not implemented'},
-type=t.type,
-class=t.class
-};
-local function s(t,e)
-return(i[e]and i[e][t[e]])or'';
-end
-function e.print(t)
-for o,e in o{'id','qr','opcode','aa','tc','rd','ra','z',
-'rcode','qdcount','ancount','nscount','arcount'}do
-m(a.format('%-30s','header.'..e),t.header[e],s(t.header,e));
-end
-for t,e in p(t.question)do
-m(a.format('question[%i].name         ',t),e.name);
-m(a.format('question[%i].type         ',t),e.type);
-m(a.format('question[%i].class        ',t),e.class);
-end
-local h={name=1,type=1,class=1,ttl=1,rdlength=1,rdata=1};
-local e;
-for n,i in o({'answer','authority','additional'})do
-for n,t in o(t[i])do
-for h,o in o({'name','type','class','ttl','rdlength'})do
-e=a.format('%s[%i].%s',i,n,o);
-m(a.format('%-30s',e),t[o],s(t,o));
-end
-for t,o in o(t)do
-if not h[t]then
-e=a.format('%s[%i].%s',i,n,t);
-m(a.format('%-30s  %s',v(e),v(o)));
-end
-end
-end
-end
-end
-function t.resolver()
-local t={active={},cache={},unsorted={},wanted={},yielded={},best_server=1};
-r(t,e);
-r(t.cache,f);
-r(t.unsorted,{__mode='kv'});
-return t;
-end
-local e=t.resolver();
-t._resolver=e;
-function t.lookup(...)
-return e:lookup(...);
-end
-function t.tohostname(...)
-return e:tohostname(...);
-end
-function t.purge(...)
-return e:purge(...);
-end
-function t.peek(...)
-return e:peek(...);
-end
-function t.query(...)
-return e:query(...);
-end
-function t.feed(...)
-return e:feed(...);
-end
-function t.cancel(...)
-return e:cancel(...);
-end
-function t.settimeout(...)
-return e:settimeout(...);
-end
-function t.socket_wrapper_set(...)
-return e:socket_wrapper_set(...);
-end
-return t;
-end)
-package.preload['net.adns']=(function(...)
-local c=require"net.server";
-local o=require"net.dns";
-local e=require"util.logger".init("adns");
-local t,t=table.insert,table.remove;
-local n,s,l=coroutine,tostring,pcall;
-local function u(a,a,t,e)return(e-t)+1;end
-module"adns"
-function lookup(d,t,h,r)
-return n.wrap(function(a)
-if a then
-e("debug","Records for %s already cached, using those...",t);
-d(a);
-return;
-end
-e("debug","Records for %s not in cache, sending query (%s)...",t,s(n.running()));
-local i,a=o.query(t,h,r);
-if i then
-n.yield({r or"IN",h or"A",t,n.running()});
-e("debug","Reply for %s (%s)",t,s(n.running()));
-end
-if i then
-i,a=l(d,o.peek(t,h,r));
-else
-e("error","Error sending DNS query: %s",a);
-i,a=l(d,nil,a);
-end
-if not i then
-e("error","Error in DNS response handler: %s",s(a));
-end
-end)(o.peek(t,h,r));
-end
-function cancel(t,a,i)
-e("warn","Cancelling DNS lookup for %s",s(t[3]));
-o.cancel(t[1],t[2],t[3],t[4],a);
-end
-function new_async_socket(a,i)
-local s="<unknown>";
-local n={};
-local t={};
-function n.onincoming(a,e)
-if e then
-o.feed(t,e);
-end
-end
-function n.ondisconnect(a,o)
-if o then
-e("warn","DNS socket for %s disconnected: %s",s,o);
-local t=i.server;
-if i.socketset[a]==i.best_server and i.best_server==#t then
-e("error","Exhausted all %d configured DNS servers, next lookup will try %s again",#t,t[1]);
-end
-i:servfail(a);
-end
-end
-t=c.wrapclient(a,"dns",53,n);
-if not t then
-e("warn","handler is nil");
-end
-t.settimeout=function()end
-t.setsockname=function(e,...)return a:setsockname(...);end
-t.setpeername=function(e,...)s=(...);local a=a:setpeername(...);e:set_send(u);return a;end
-t.connect=function(e,...)return a:connect(...)end
-t.send=function(t,o)
-local t=a.getpeername;
-e("debug","Sending DNS query to %s",(t and t(a))or"<unconnected>");
-return a:send(o);
-end
-return t;
-end
-o.socket_wrapper_set(new_async_socket);
+
+
+local function hint(p, s)    -- - - - - - - - - - - - - - - - - - - - - - hint
+	return (hints[s] and hints[s][p[s]]) or '';
+end
+
+
+function resolver.print(response)    -- - - - - - - - - - - - - resolver.print
+	for s,s in pairs { 'id', 'qr', 'opcode', 'aa', 'tc', 'rd', 'ra', 'z',
+						'rcode', 'qdcount', 'ancount', 'nscount', 'arcount' } do
+		print( string.format('%-30s', 'header.'..s), response.header[s], hint(response.header, s) );
+	end
+
+	for i,question in ipairs(response.question) do
+		print(string.format ('question[%i].name         ', i), question.name);
+		print(string.format ('question[%i].type         ', i), question.type);
+		print(string.format ('question[%i].class        ', i), question.class);
+	end
+
+	local common = { name=1, type=1, class=1, ttl=1, rdlength=1, rdata=1 };
+	local tmp;
+	for s,s in pairs({'answer', 'authority', 'additional'}) do
+		for i,rr in pairs(response[s]) do
+			for j,t in pairs({ 'name', 'type', 'class', 'ttl', 'rdlength' }) do
+				tmp = string.format('%s[%i].%s', s, i, t);
+				print(string.format('%-30s', tmp), rr[t], hint(rr, t));
+			end
+			for j,t in pairs(rr) do
+				if not common[j] then
+					tmp = string.format('%s[%i].%s', s, i, j);
+					print(string.format('%-30s  %s', tostring(tmp), tostring(t)));
+				end
+			end
+		end
+	end
+end
+
+
+-- module api ------------------------------------------------------ module api
+
+
+function dns.resolver ()    -- - - - - - - - - - - - - - - - - - - - - resolver
+	-- this function seems to be redundant with resolver.new ()
+
+	local r = { active = {}, cache = {}, unsorted = {}, wanted = {}, yielded = {}, best_server = 1 };
+	setmetatable (r, resolver);
+	setmetatable (r.cache, cache_metatable);
+	setmetatable (r.unsorted, { __mode = 'kv' });
+	return r;
+end
+
+local _resolver = dns.resolver();
+dns._resolver = _resolver;
+
+function dns.lookup(...)    -- - - - - - - - - - - - - - - - - - - - -  lookup
+	return _resolver:lookup(...);
+end
+
+function dns.tohostname(...)
+	return _resolver:tohostname(...);
+end
+
+function dns.purge(...)    -- - - - - - - - - - - - - - - - - - - - - -  purge
+	return _resolver:purge(...);
+end
+
+function dns.peek(...)    -- - - - - - - - - - - - - - - - - - - - - - -  peek
+	return _resolver:peek(...);
+end
+
+function dns.query(...)    -- - - - - - - - - - - - - - - - - - - - - -  query
+	return _resolver:query(...);
+end
+
+function dns.feed(...)    -- - - - - - - - - - - - - - - - - - - - - - -  feed
+	return _resolver:feed(...);
+end
+
+function dns.cancel(...)  -- - - - - - - - - - - - - - - - - - - - - -  cancel
+	return _resolver:cancel(...);
+end
+
+function dns.settimeout(...)
+	return _resolver:settimeout(...);
+end
+
+function dns.socket_wrapper_set(...)    -- - - - - - - - -  socket_wrapper_set
+	return _resolver:socket_wrapper_set(...);
+end
+
+return dns;
+ end)
+package.preload['net.adns'] = (function (...)
+-- Prosody IM
+-- Copyright (C) 2008-2010 Matthew Wild
+-- Copyright (C) 2008-2010 Waqas Hussain
+-- 
+-- This project is MIT/X11 licensed. Please see the
+-- COPYING file in the source package for more information.
+--
+
+local server = require "net.server";
+local dns = require "net.dns";
+
+local log = require "util.logger".init("adns");
+
+local t_insert, t_remove = table.insert, table.remove;
+local coroutine, tostring, pcall = coroutine, tostring, pcall;
+
+local function dummy_send(sock, data, i, j) return (j-i)+1; end
+
+module "adns"
+
+function lookup(handler, qname, qtype, qclass)
+	return coroutine.wrap(function (peek)
+				if peek then
+					log("debug", "Records for %s already cached, using those...", qname);
+					handler(peek);
+					return;
+				end
+				log("debug", "Records for %s not in cache, sending query (%s)...", qname, tostring(coroutine.running()));
+				local ok, err = dns.query(qname, qtype, qclass);
+				if ok then
+					coroutine.yield({ qclass or "IN", qtype or "A", qname, coroutine.running()}); -- Wait for reply
+					log("debug", "Reply for %s (%s)", qname, tostring(coroutine.running()));
+				end
+				if ok then
+					ok, err = pcall(handler, dns.peek(qname, qtype, qclass));
+				else
+					log("error", "Error sending DNS query: %s", err);
+					ok, err = pcall(handler, nil, err);
+				end
+				if not ok then
+					log("error", "Error in DNS response handler: %s", tostring(err));
+				end
+			end)(dns.peek(qname, qtype, qclass));
+end
+
+function cancel(handle, call_handler, reason)
+	log("warn", "Cancelling DNS lookup for %s", tostring(handle[3]));
+	dns.cancel(handle[1], handle[2], handle[3], handle[4], call_handler);
+end
+
+function new_async_socket(sock, resolver)
+	local peername = "<unknown>";
+	local listener = {};
+	local handler = {};
+	function listener.onincoming(conn, data)
+		if data then
+			dns.feed(handler, data);
+		end
+	end
+	function listener.ondisconnect(conn, err)
+		if err then
+			log("warn", "DNS socket for %s disconnected: %s", peername, err);
+			local servers = resolver.server;
+			if resolver.socketset[conn] == resolver.best_server and resolver.best_server == #servers then
+				log("error", "Exhausted all %d configured DNS servers, next lookup will try %s again", #servers, servers[1]);
+			end
+		
+			resolver:servfail(conn); -- Let the magic commence
+		end
+	end
+	handler = server.wrapclient(sock, "dns", 53, listener);
+	if not handler then
+		log("warn", "handler is nil");
+	end
+	
+	handler.settimeout = function () end
+	handler.setsockname = function (_, ...) return sock:setsockname(...); end
+	handler.setpeername = function (_, ...) peername = (...); local ret = sock:setpeername(...); _:set_send(dummy_send); return ret; end
+	handler.connect = function (_, ...) return sock:connect(...) end
+	--handler.send = function (_, data) _:write(data);  return _.sendbuffer and _.sendbuffer(); end
+	handler.send = function (_, data)
+		local getpeername = sock.getpeername;
+		log("debug", "Sending DNS query to %s", (getpeername and getpeername(sock)) or "<unconnected>");
+		return sock:send(data);
+	end
+	return handler;
+end
+
+dns.socket_wrapper_set(new_async_socket);
+
 return _M;
-end)
-package.preload['net.server']=(function(...)
-local s=function(e)
-return _G[e]
+ end)
+package.preload['net.server'] = (function (...)
+-- 
+-- server.lua by blastbeat of the luadch project
+-- Re-used here under the MIT/X Consortium License
+-- 
+-- Modifications (C) 2008-2010 Matthew Wild, Waqas Hussain
+--
+
+-- // wrapping luadch stuff // --
+
+local use = function( what )
+	return _G[ what ]
 end
-local re=function(e)
-for t,a in pairs(e)do
-e[t]=nil
+local clean = function( tbl )
+	for i, k in pairs( tbl ) do
+		tbl[ i ] = nil
+	end
 end
-end
-local H,e=require("util.logger").init("socket"),table.concat;
-local i=function(...)return H("debug",e{...});end
-local se=function(...)return H("warn",e{...});end
-local e=collectgarbage
-local he=1
-local R=s"type"
-local j=s"pairs"
-local ce=s"ipairs"
-local p=s"tonumber"
-local l=s"tostring"
-local e=s"collectgarbage"
-local o=s"os"
-local t=s"table"
-local a=s"string"
-local e=s"coroutine"
-local Y=o.difftime
-local W=math.min
-local ue=math.huge
-local le=t.concat
-local t=t.remove
-local de=a.len
-local ve=a.sub
-local be=e.wrap
-local pe=e.yield
-local q=s"ssl"
-local z=s"socket"or require"socket"
-local P=z.gettime
-local ye=(q and q.wrap)
-local we=z.bind
-local fe=z.sleep
-local me=z.select
-local e=(q and q.newcontext)
-local J
-local V
-local X
-local G
-local B
-local Z
-local m
-local ee
-local oe
-local ie
-local ne
-local Q
-local h
-local te
-local e
-local L
-local ae
-local v
-local r
-local F
-local d
-local n
-local x
-local b
-local w
-local f
-local a
-local o
-local g
-local M
-local C
-local N
-local S
-local K
-local u
-local E
+
+local log, table_concat = require ("util.logger").init("socket"), table.concat;
+local out_put = function (...) return log("debug", table_concat{...}); end
+local out_error = function (...) return log("warn", table_concat{...}); end
+local mem_free = collectgarbage
+
+----------------------------------// DECLARATION //--
+
+--// constants //--
+
+local STAT_UNIT = 1 -- byte
+
+--// lua functions //--
+
+local type = use "type"
+local pairs = use "pairs"
+local ipairs = use "ipairs"
+local tonumber = use "tonumber"
+local tostring = use "tostring"
+local collectgarbage = use "collectgarbage"
+
+--// lua libs //--
+
+local os = use "os"
+local table = use "table"
+local string = use "string"
+local coroutine = use "coroutine"
+
+--// lua lib methods //--
+
+local os_difftime = os.difftime
+local math_min = math.min
+local math_huge = math.huge
+local table_concat = table.concat
+local table_remove = table.remove
+local string_len = string.len
+local string_sub = string.sub
+local coroutine_wrap = coroutine.wrap
+local coroutine_yield = coroutine.yield
+
+--// extern libs //--
+
+local luasec = use "ssl"
+local luasocket = use "socket" or require "socket"
+local luasocket_gettime = luasocket.gettime
+
+--// extern lib methods //--
+
+local ssl_wrap = ( luasec and luasec.wrap )
+local socket_bind = luasocket.bind
+local socket_sleep = luasocket.sleep
+local socket_select = luasocket.select
+local ssl_newcontext = ( luasec and luasec.newcontext )
+
+--// functions //--
+
+local id
+local loop
+local stats
+local idfalse
+local addtimer
+local closeall
+local addsocket
+local addserver
+local getserver
+local wrapserver
+local getsettings
+local closesocket
+local removesocket
+local removeserver
+local changetimeout
+local wrapconnection
+local changesettings
+
+--// tables //--
+
+local _server
+local _readlist
+local _timerlist
+local _sendlist
+local _socketlist
+local _closelist
+local _readtimes
+local _writetimes
+
+--// simple data types //--
+
 local _
-local T
-local O
-local A
-local U
-local D
-local k
-local I
-v={}
-r={}
-d={}
-F={}
-n={}
-b={}
-w={}
-x={}
-a=0
-o=0
-g=0
-M=0
-C=0
-N=1
-S=0
-E=51e3*1024
-_=25e3*1024
-T=12e5
-O=6e4
-A=6*60*60
-U=false
-k=1e3
-I=30
-ie=function(f,t,y,u,v,m,c)
-c=c or k
-local s=0
-local w,e=f.onconnect,f.ondisconnect
-local p=t.accept
-local e={}
-e.shutdown=function()end
-e.ssl=function()
-return m~=nil
-end
-e.sslctx=function()
-return m
-end
-e.remove=function()
-s=s-1
-end
-e.close=function()
-for a,e in j(n)do
-if e.serverport==u then
-e.disconnect(e,"server closed")
-e:close(true)
-end
-end
-t:close()
-o=h(d,t,o)
-a=h(r,t,a)
-n[t]=nil
-e=nil
-t=nil
-i"server.lua: closed server handler and removed sockets from list"
-end
-e.ip=function()
-return y
-end
-e.serverport=function()
-return u
-end
-e.socket=function()
-return t
-end
-e.readbuffer=function()
-if s>c then
-i("server.lua: refused new client connection: server full")
-return false
-end
-local t,n=p(t)
-if t then
-local o,a=t:getpeername()
-t:settimeout(0)
-local t,n,e=L(e,f,t,o,u,a,v,m)
-if e then
-return false
-end
-s=s+1
-i("server.lua: accepted new client connection from ",l(o),":",l(a)," to ",l(u))
-if w then
-return w(t);
-end
-return;
-elseif n then
-i("server.lua: error with new client connection: ",l(n))
-return false
-end
-end
-return e
-end
-L=function(V,v,t,H,K,N,A,z)
-t:settimeout(0)
-local y
-local T
-local j
-local S
-local L=v.onincoming
-local F=v.onstatus
-local g=v.ondisconnect
-local P=v.ondrain
-local p={}
-local c=0
-local B
-local R
-local W
-local s=0
-local k=false
-local O=false
-local Y,D=0,0
-local E=E
-local _=_
-local e=p
-e.dispatch=function()
-return L
-end
-e.disconnect=function()
-return g
-end
-e.setlistener=function(a,t)
-L=t.onincoming
-g=t.ondisconnect
-F=t.onstatus
-P=t.ondrain
-end
-e.getstats=function()
-return D,Y
-end
-e.ssl=function()
-return S
-end
-e.sslctx=function()
-return z
-end
-e.send=function(n,i,o,a)
-return y(t,i,o,a)
-end
-e.receive=function(o,a)
-return T(t,o,a)
-end
-e.shutdown=function(a)
-return j(t,a)
-end
-e.setoption=function(i,a,o)
-if t.setoption then
-return t:setoption(a,o);
-end
-return false,"setoption not implemented";
-end
-e.close=function(u,l)
-if not e then return true;end
-a=h(r,t,a)
-b[e]=nil
-if c~=0 then
-if not(l or R)then
-e.sendbuffer()
-if c~=0 then
-if e then
-e.write=nil
-end
-B=true
-return false
-end
-else
-y(t,le(p,"",1,c),1,s)
-end
-end
-if t then
-f=j and j(t)
-t:close()
-o=h(d,t,o)
-n[t]=nil
-t=nil
-else
-i"server.lua: socket already closed"
-end
-if e then
-w[e]=nil
-x[e]=nil
-e=nil
-end
-if V then
-V.remove()
-end
-i"server.lua: closed client handler and removed socket from list"
-return true
-end
-e.ip=function()
-return H
-end
-e.serverport=function()
-return K
-end
-e.clientport=function()
-return N
-end
-local x=function(i,a)
-s=s+de(a)
-if s>E then
-x[e]="send buffer exceeded"
-e.write=G
-return false
-elseif t and not d[t]then
-o=m(d,t,o)
-end
-c=c+1
-p[c]=a
-if e then
-w[e]=w[e]or u
-end
-return true
-end
-e.write=x
-e.bufferqueue=function(t)
-return p
-end
-e.socket=function(a)
-return t
-end
-e.set_mode=function(a,t)
-A=t or A
-return A
-end
-e.set_send=function(a,t)
-y=t or y
-return y
-end
-e.bufferlen=function(o,t,a)
-E=a or E
-_=t or _
-return s,_,E
-end
-e.lock_read=function(i,o)
-if o==true then
-local o=a
-a=h(r,t,a)
-b[e]=nil
-if a~=o then
-k=true
-end
-elseif o==false then
-if k then
-k=false
-a=m(r,t,a)
-b[e]=u
-end
-end
-return k
-end
-e.pause=function(t)
-return t:lock_read(true);
-end
-e.resume=function(t)
-return t:lock_read(false);
-end
-e.lock=function(i,a)
-e.lock_read(a)
-if a==true then
-e.write=G
-local a=o
-o=h(d,t,o)
-w[e]=nil
-if o~=a then
-O=true
-end
-elseif a==false then
-e.write=x
-if O then
-O=false
-x("")
-end
-end
-return k,O
-end
-local b=function()
-local a,t,o=T(t,A)
-if not t or(t=="wantread"or t=="timeout")then
-local o=a or o or""
-local a=de(o)
-if a>_ then
-g(e,"receive buffer exceeded")
-e:close(true)
-return false
-end
-local a=a*he
-D=D+a
-C=C+a
-b[e]=u
-return L(e,o,t)
-else
-i("server.lua: client ",l(H),":",l(N)," read error: ",l(t))
-R=true
-g(e,t)
-f=e and e:close()
-return false
-end
-end
-local w=function()
-local m,a,n,r,v;
-local v;
-if t then
-r=le(p,"",1,c)
-m,a,n=y(t,r,1,s)
-v=(m or n or 0)*he
-Y=Y+v
-M=M+v
-f=U and re(p)
-else
-m,a,v=false,"closed",0;
-end
-if m then
-c=0
-s=0
-o=h(d,t,o)
-w[e]=nil
-if P then
-P(e)
-end
-f=W and e:starttls(nil)
-f=B and e:close()
-return true
-elseif n and(a=="timeout"or a=="wantwrite")then
-r=ve(r,n+1,s)
-p[1]=r
-c=1
-s=s-n
-w[e]=u
-return true
-else
-i("server.lua: client ",l(H),":",l(N)," write error: ",l(a))
-R=true
-g(e,a)
-f=e and e:close()
-return false
-end
-end
-local s;
-function e.set_sslctx(y,t)
-z=t;
-local c,u
-s=be(function(n)
-local t
-for s=1,I do
-o=(u and h(d,n,o))or o
-a=(c and h(r,n,a))or a
-c,u=nil,nil
-f,t=n:dohandshake()
-if not t then
-i("server.lua: ssl handshake done")
-e.readbuffer=b
-e.sendbuffer=w
-f=F and F(e,"ssl-handshake-complete")
-if y.autostart_ssl and v.onconnect then
-v.onconnect(y);
-end
-a=m(r,n,a)
-return true
-else
-if t=="wantwrite"then
-o=m(d,n,o)
-u=true
-elseif t=="wantread"then
-a=m(r,n,a)
-c=true
-else
-break;
-end
-t=nil;
-pe()
-end
-end
-i("server.lua: ssl handshake error: ",l(t or"handshake too long"))
-g(e,"ssl handshake failed")
-f=e and e:close(true)
-return false
-end
+local _readlistlen
+local _sendlistlen
+local _timerlistlen
+
+local _sendtraffic
+local _readtraffic
+
+local _selecttimeout
+local _sleeptime
+
+local _starttime
+local _currenttime
+
+local _maxsendlen
+local _maxreadlen
+
+local _checkinterval
+local _sendtimeout
+local _readtimeout
+
+local _cleanqueue
+
+local _timer
+
+local _maxclientsperserver
+
+local _maxsslhandshake
+
+----------------------------------// DEFINITION //--
+
+_server = { } -- key = port, value = table; list of listening servers
+_readlist = { } -- array with sockets to read from
+_sendlist = { } -- arrary with sockets to write to
+_timerlist = { } -- array of timer functions
+_socketlist = { } -- key = socket, value = wrapped socket (handlers)
+_readtimes = { } -- key = handler, value = timestamp of last data reading
+_writetimes = { } -- key = handler, value = timestamp of last data writing/sending
+_closelist = { } -- handlers to close
+
+_readlistlen = 0 -- length of readlist
+_sendlistlen = 0 -- length of sendlist
+_timerlistlen = 0 -- lenght of timerlist
+
+_sendtraffic = 0 -- some stats
+_readtraffic = 0
+
+_selecttimeout = 1 -- timeout of socket.select
+_sleeptime = 0 -- time to wait at the end of every loop
+
+_maxsendlen = 51000 * 1024 -- max len of send buffer
+_maxreadlen = 25000 * 1024 -- max len of read buffer
+
+_checkinterval = 1200000 -- interval in secs to check idle clients
+_sendtimeout = 60000 -- allowed send idle time in secs
+_readtimeout = 6 * 60 * 60 -- allowed read idle time in secs
+
+_cleanqueue = false -- clean bufferqueue after using
+
+_maxclientsperserver = 1000
+
+_maxsslhandshake = 30 -- max handshake round-trips
+
+----------------------------------// PRIVATE //--
+
+wrapserver = function( listeners, socket, ip, serverport, pattern, sslctx, maxconnections ) -- this function wraps a server
+
+	maxconnections = maxconnections or _maxclientsperserver
+
+	local connections = 0
+
+	local dispatch, disconnect = listeners.onconnect, listeners.ondisconnect
+
+	local accept = socket.accept
+
+	--// public methods of the object //--
+
+	local handler = { }
+
+	handler.shutdown = function( ) end
+
+	handler.ssl = function( )
+		return sslctx ~= nil
+	end
+	handler.sslctx = function( )
+		return sslctx
+	end
+	handler.remove = function( )
+		connections = connections - 1
+	end
+	handler.close = function( )
+		for _, handler in pairs( _socketlist ) do
+			if handler.serverport == serverport then
+				handler.disconnect( handler, "server closed" )
+				handler:close( true )
+			end
+		end
+		socket:close( )
+		_sendlistlen = removesocket( _sendlist, socket, _sendlistlen )
+		_readlistlen = removesocket( _readlist, socket, _readlistlen )
+		_socketlist[ socket ] = nil
+		handler = nil
+		socket = nil
+		--mem_free( )
+		out_put "server.lua: closed server handler and removed sockets from list"
+	end
+	handler.ip = function( )
+		return ip
+	end
+	handler.serverport = function( )
+		return serverport
+	end
+	handler.socket = function( )
+		return socket
+	end
+	handler.readbuffer = function( )
+		if connections > maxconnections then
+			out_put( "server.lua: refused new client connection: server full" )
+			return false
+		end
+		local client, err = accept( socket )	-- try to accept
+		if client then
+			local ip, clientport = client:getpeername( )
+			client:settimeout( 0 )
+			local handler, client, err = wrapconnection( handler, listeners, client, ip, serverport, clientport, pattern, sslctx ) -- wrap new client socket
+			if err then -- error while wrapping ssl socket
+				return false
+			end
+			connections = connections + 1
+			out_put( "server.lua: accepted new client connection from ", tostring(ip), ":", tostring(clientport), " to ", tostring(serverport))
+			if dispatch then
+				return dispatch( handler );
+			end
+			return;
+		elseif err then -- maybe timeout or something else
+			out_put( "server.lua: error with new client connection: ", tostring(err) )
+			return false
+		end
+	end
+	return handler
+end
+
+wrapconnection = function( server, listeners, socket, ip, serverport, clientport, pattern, sslctx ) -- this function wraps a client to a handler object
+
+	socket:settimeout( 0 )
+
+	--// local import of socket methods //--
+
+	local send
+	local receive
+	local shutdown
+
+	--// private closures of the object //--
+
+	local ssl
+
+	local dispatch = listeners.onincoming
+	local status = listeners.onstatus
+	local disconnect = listeners.ondisconnect
+	local drain = listeners.ondrain
+
+	local bufferqueue = { } -- buffer array
+	local bufferqueuelen = 0	-- end of buffer array
+
+	local toclose
+	local fatalerror
+	local needtls
+
+	local bufferlen = 0
+
+	local noread = false
+	local nosend = false
+
+	local sendtraffic, readtraffic = 0, 0
+
+	local maxsendlen = _maxsendlen
+	local maxreadlen = _maxreadlen
+
+	--// public methods of the object //--
+
+	local handler = bufferqueue -- saves a table ^_^
+
+	handler.dispatch = function( )
+		return dispatch
+	end
+	handler.disconnect = function( )
+		return disconnect
+	end
+	handler.setlistener = function( self, listeners )
+		dispatch = listeners.onincoming
+		disconnect = listeners.ondisconnect
+		status = listeners.onstatus
+		drain = listeners.ondrain
+	end
+	handler.getstats = function( )
+		return readtraffic, sendtraffic
+	end
+	handler.ssl = function( )
+		return ssl
+	end
+	handler.sslctx = function ( )
+		return sslctx
+	end
+	handler.send = function( _, data, i, j )
+		return send( socket, data, i, j )
+	end
+	handler.receive = function( pattern, prefix )
+		return receive( socket, pattern, prefix )
+	end
+	handler.shutdown = function( pattern )
+		return shutdown( socket, pattern )
+	end
+	handler.setoption = function (self, option, value)
+		if socket.setoption then
+			return socket:setoption(option, value);
+		end
+		return false, "setoption not implemented";
+	end
+	handler.close = function( self, forced )
+		if not handler then return true; end
+		_readlistlen = removesocket( _readlist, socket, _readlistlen )
+		_readtimes[ handler ] = nil
+		if bufferqueuelen ~= 0 then
+			if not ( forced or fatalerror ) then
+				handler.sendbuffer( )
+				if bufferqueuelen ~= 0 then -- try again...
+					if handler then
+						handler.write = nil -- ... but no further writing allowed
+					end
+					toclose = true
+					return false
+				end
+			else
+				send( socket, table_concat( bufferqueue, "", 1, bufferqueuelen ), 1, bufferlen )	-- forced send
+			end
+		end
+		if socket then
+			_ = shutdown and shutdown( socket )
+			socket:close( )
+			_sendlistlen = removesocket( _sendlist, socket, _sendlistlen )
+			_socketlist[ socket ] = nil
+			socket = nil
+		else
+			out_put "server.lua: socket already closed"
+		end
+		if handler then
+			_writetimes[ handler ] = nil
+			_closelist[ handler ] = nil
+			handler = nil
+		end
+		if server then
+			server.remove( )
+		end
+		out_put "server.lua: closed client handler and removed socket from list"
+		return true
+	end
+	handler.ip = function( )
+		return ip
+	end
+	handler.serverport = function( )
+		return serverport
+	end
+	handler.clientport = function( )
+		return clientport
+	end
+	local write = function( self, data )
+		bufferlen = bufferlen + string_len( data )
+		if bufferlen > maxsendlen then
+			_closelist[ handler ] = "send buffer exceeded"	 -- cannot close the client at the moment, have to wait to the end of the cycle
+			handler.write = idfalse -- dont write anymore
+			return false
+		elseif socket and not _sendlist[ socket ] then
+			_sendlistlen = addsocket(_sendlist, socket, _sendlistlen)
+		end
+		bufferqueuelen = bufferqueuelen + 1
+		bufferqueue[ bufferqueuelen ] = data
+		if handler then
+			_writetimes[ handler ] = _writetimes[ handler ] or _currenttime
+		end
+		return true
+	end
+	handler.write = write
+	handler.bufferqueue = function( self )
+		return bufferqueue
+	end
+	handler.socket = function( self )
+		return socket
+	end
+	handler.set_mode = function( self, new )
+		pattern = new or pattern
+		return pattern
+	end
+	handler.set_send = function ( self, newsend )
+		send = newsend or send
+		return send
+	end
+	handler.bufferlen = function( self, readlen, sendlen )
+		maxsendlen = sendlen or maxsendlen
+		maxreadlen = readlen or maxreadlen
+		return bufferlen, maxreadlen, maxsendlen
+	end
+	--TODO: Deprecate
+	handler.lock_read = function (self, switch)
+		if switch == true then
+			local tmp = _readlistlen
+			_readlistlen = removesocket( _readlist, socket, _readlistlen )
+			_readtimes[ handler ] = nil
+			if _readlistlen ~= tmp then
+				noread = true
+			end
+		elseif switch == false then
+			if noread then
+				noread = false
+				_readlistlen = addsocket(_readlist, socket, _readlistlen)
+				_readtimes[ handler ] = _currenttime
+			end
+		end
+		return noread
+	end
+	handler.pause = function (self)
+		return self:lock_read(true);
+	end
+	handler.resume = function (self)
+		return self:lock_read(false);
+	end
+	handler.lock = function( self, switch )
+		handler.lock_read (switch)
+		if switch == true then
+			handler.write = idfalse
+			local tmp = _sendlistlen
+			_sendlistlen = removesocket( _sendlist, socket, _sendlistlen )
+			_writetimes[ handler ] = nil
+			if _sendlistlen ~= tmp then
+				nosend = true
+			end
+		elseif switch == false then
+			handler.write = write
+			if nosend then
+				nosend = false
+				write( "" )
+			end
+		end
+		return noread, nosend
+	end
+	local _readbuffer = function( ) -- this function reads data
+		local buffer, err, part = receive( socket, pattern )	-- receive buffer with "pattern"
+		if not err or (err == "wantread" or err == "timeout") then -- received something
+			local buffer = buffer or part or ""
+			local len = string_len( buffer )
+			if len > maxreadlen then
+				disconnect( handler, "receive buffer exceeded" )
+				handler:close( true )
+				return false
+			end
+			local count = len * STAT_UNIT
+			readtraffic = readtraffic + count
+			_readtraffic = _readtraffic + count
+			_readtimes[ handler ] = _currenttime
+			--out_put( "server.lua: read data '", buffer:gsub("[^%w%p ]", "."), "', error: ", err )
+			return dispatch( handler, buffer, err )
+		else	-- connections was closed or fatal error
+			out_put( "server.lua: client ", tostring(ip), ":", tostring(clientport), " read error: ", tostring(err) )
+			fatalerror = true
+			disconnect( handler, err )
+			_ = handler and handler:close( )
+			return false
+		end
+	end
+	local _sendbuffer = function( ) -- this function sends data
+		local succ, err, byte, buffer, count;
+		local count;
+		if socket then
+			buffer = table_concat( bufferqueue, "", 1, bufferqueuelen )
+			succ, err, byte = send( socket, buffer, 1, bufferlen )
+			count = ( succ or byte or 0 ) * STAT_UNIT
+			sendtraffic = sendtraffic + count
+			_sendtraffic = _sendtraffic + count
+			_ = _cleanqueue and clean( bufferqueue )
+			--out_put( "server.lua: sended '", buffer, "', bytes: ", tostring(succ), ", error: ", tostring(err), ", part: ", tostring(byte), ", to: ", tostring(ip), ":", tostring(clientport) )
+		else
+			succ, err, count = false, "closed", 0;
+		end
+		if succ then	-- sending succesful
+			bufferqueuelen = 0
+			bufferlen = 0
+			_sendlistlen = removesocket( _sendlist, socket, _sendlistlen ) -- delete socket from writelist
+			_writetimes[ handler ] = nil
+			if drain then
+				drain(handler)
+			end
+			_ = needtls and handler:starttls(nil)
+			_ = toclose and handler:close( )
+			return true
+		elseif byte and ( err == "timeout" or err == "wantwrite" ) then -- want write
+			buffer = string_sub( buffer, byte + 1, bufferlen ) -- new buffer
+			bufferqueue[ 1 ] = buffer	 -- insert new buffer in queue
+			bufferqueuelen = 1
+			bufferlen = bufferlen - byte
+			_writetimes[ handler ] = _currenttime
+			return true
+		else	-- connection was closed during sending or fatal error
+			out_put( "server.lua: client ", tostring(ip), ":", tostring(clientport), " write error: ", tostring(err) )
+			fatalerror = true
+			disconnect( handler, err )
+			_ = handler and handler:close( )
+			return false
+		end
+	end
+
+	-- Set the sslctx
+	local handshake;
+	function handler.set_sslctx(self, new_sslctx)
+		sslctx = new_sslctx;
+		local read, wrote
+		handshake = coroutine_wrap( function( client ) -- create handshake coroutine
+				local err
+				for i = 1, _maxsslhandshake do
+					_sendlistlen = ( wrote and removesocket( _sendlist, client, _sendlistlen ) ) or _sendlistlen
+					_readlistlen = ( read and removesocket( _readlist, client, _readlistlen ) ) or _readlistlen
+					read, wrote = nil, nil
+					_, err = client:dohandshake( )
+					if not err then
+						out_put( "server.lua: ssl handshake done" )
+						handler.readbuffer = _readbuffer	-- when handshake is done, replace the handshake function with regular functions
+						handler.sendbuffer = _sendbuffer
+						_ = status and status( handler, "ssl-handshake-complete" )
+						if self.autostart_ssl and listeners.onconnect then
+							listeners.onconnect(self);
+						end
+						_readlistlen = addsocket(_readlist, client, _readlistlen)
+						return true
+					else
+						if err == "wantwrite" then
+							_sendlistlen = addsocket(_sendlist, client, _sendlistlen)
+							wrote = true
+						elseif err == "wantread" then
+							_readlistlen = addsocket(_readlist, client, _readlistlen)
+							read = true
+						else
+							break;
+						end
+						err = nil;
+						coroutine_yield( ) -- handshake not finished
+					end
+				end
+				out_put( "server.lua: ssl handshake error: ", tostring(err or "handshake too long") )
+				disconnect( handler, "ssl handshake failed" )
+				_ = handler and handler:close( true )	 -- forced disconnect
+				return false	-- handshake failed
+			end
+		)
+	end
+	if luasec then
+		handler.starttls = function( self, _sslctx)
+			if _sslctx then
+				handler:set_sslctx(_sslctx);
+			end
+			if bufferqueuelen > 0 then
+				out_put "server.lua: we need to do tls, but delaying until send buffer empty"
+				needtls = true
+				return
+			end
+			out_put( "server.lua: attempting to start tls on " .. tostring( socket ) )
+			local oldsocket, err = socket
+			socket, err = ssl_wrap( socket, sslctx )	-- wrap socket
+			if not socket then
+				out_put( "server.lua: error while starting tls on client: ", tostring(err or "unknown error") )
+				return nil, err -- fatal error
+			end
+
+			socket:settimeout( 0 )
+
+			-- add the new socket to our system
+			send = socket.send
+			receive = socket.receive
+			shutdown = id
+			_socketlist[ socket ] = handler
+			_readlistlen = addsocket(_readlist, socket, _readlistlen)
+			
+			-- remove traces of the old socket
+			_readlistlen = removesocket( _readlist, oldsocket, _readlistlen )
+			_sendlistlen = removesocket( _sendlist, oldsocket, _sendlistlen )
+			_socketlist[ oldsocket ] = nil
+
+			handler.starttls = nil
+			needtls = nil
+
+			-- Secure now (if handshake fails connection will close)
+			ssl = true
+
+			handler.readbuffer = handshake
+			handler.sendbuffer = handshake
+			handshake( socket ) -- do handshake
+		end
+		handler.readbuffer = _readbuffer
+		handler.sendbuffer = _sendbuffer
+		
+		if sslctx then
+			out_put "server.lua: auto-starting ssl negotiation..."
+			handler.autostart_ssl = true;
+			handler:starttls(sslctx);
+		end
+
+	else
+		handler.readbuffer = _readbuffer
+		handler.sendbuffer = _sendbuffer
+	end
+	send = socket.send
+	receive = socket.receive
+	shutdown = ( ssl and id ) or socket.shutdown
+
+	_socketlist[ socket ] = handler
+	_readlistlen = addsocket(_readlist, socket, _readlistlen)
+	return handler, socket
+end
+
+id = function( )
+end
+
+idfalse = function( )
+	return false
+end
+
+addsocket = function( list, socket, len )
+	if not list[ socket ] then
+		len = len + 1
+		list[ len ] = socket
+		list[ socket ] = len
+	end
+	return len;
+end
+
+removesocket = function( list, socket, len )	-- this function removes sockets from a list ( copied from copas )
+	local pos = list[ socket ]
+	if pos then
+		list[ socket ] = nil
+		local last = list[ len ]
+		list[ len ] = nil
+		if last ~= socket then
+			list[ last ] = pos
+			list[ pos ] = last
+		end
+		return len - 1
+	end
+	return len
+end
+
+closesocket = function( socket )
+	_sendlistlen = removesocket( _sendlist, socket, _sendlistlen )
+	_readlistlen = removesocket( _readlist, socket, _readlistlen )
+	_socketlist[ socket ] = nil
+	socket:close( )
+	--mem_free( )
+end
+
+local function link(sender, receiver, buffersize)
+	local sender_locked;
+	local _sendbuffer = receiver.sendbuffer;
+	function receiver.sendbuffer()
+		_sendbuffer();
+		if sender_locked and receiver.bufferlen() < buffersize then
+			sender:lock_read(false); -- Unlock now
+			sender_locked = nil;
+		end
+	end
+	
+	local _readbuffer = sender.readbuffer;
+	function sender.readbuffer()
+		_readbuffer();
+		if not sender_locked and receiver.bufferlen() >= buffersize then
+			sender_locked = true;
+			sender:lock_read(true);
+		end
+	end
+end
+
+----------------------------------// PUBLIC //--
+
+addserver = function( addr, port, listeners, pattern, sslctx ) -- this function provides a way for other scripts to reg a server
+	local err
+	if type( listeners ) ~= "table" then
+		err = "invalid listener table"
+	end
+	if type( port ) ~= "number" or not ( port >= 0 and port <= 65535 ) then
+		err = "invalid port"
+	elseif _server[ addr..":"..port ] then
+		err = "listeners on '[" .. addr .. "]:" .. port .. "' already exist"
+	elseif sslctx and not luasec then
+		err = "luasec not found"
+	end
+	if err then
+		out_error( "server.lua, [", addr, "]:", port, ": ", err )
+		return nil, err
+	end
+	addr = addr or "*"
+	local server, err = socket_bind( addr, port )
+	if err then
+		out_error( "server.lua, [", addr, "]:", port, ": ", err )
+		return nil, err
+	end
+	local handler, err = wrapserver( listeners, server, addr, port, pattern, sslctx, _maxclientsperserver ) -- wrap new server socket
+	if not handler then
+		server:close( )
+		return nil, err
+	end
+	server:settimeout( 0 )
+	_readlistlen = addsocket(_readlist, server, _readlistlen)
+	_server[ addr..":"..port ] = handler
+	_socketlist[ server ] = handler
+	out_put( "server.lua: new "..(sslctx and "ssl " or "").."server listener on '[", addr, "]:", port, "'" )
+	return handler
+end
+
+getserver = function ( addr, port )
+	return _server[ addr..":"..port ];
+end
+
+removeserver = function( addr, port )
+	local handler = _server[ addr..":"..port ]
+	if not handler then
+		return nil, "no server found on '[" .. addr .. "]:" .. tostring( port ) .. "'"
+	end
+	handler:close( )
+	_server[ addr..":"..port ] = nil
+	return true
+end
+
+closeall = function( )
+	for _, handler in pairs( _socketlist ) do
+		handler:close( )
+		_socketlist[ _ ] = nil
+	end
+	_readlistlen = 0
+	_sendlistlen = 0
+	_timerlistlen = 0
+	_server = { }
+	_readlist = { }
+	_sendlist = { }
+	_timerlist = { }
+	_socketlist = { }
+	--mem_free( )
+end
+
+getsettings = function( )
+	return	_selecttimeout, _sleeptime, _maxsendlen, _maxreadlen, _checkinterval, _sendtimeout, _readtimeout, _cleanqueue, _maxclientsperserver, _maxsslhandshake
+end
+
+changesettings = function( new )
+	if type( new ) ~= "table" then
+		return nil, "invalid settings table"
+	end
+	_selecttimeout = tonumber( new.timeout ) or _selecttimeout
+	_sleeptime = tonumber( new.sleeptime ) or _sleeptime
+	_maxsendlen = tonumber( new.maxsendlen ) or _maxsendlen
+	_maxreadlen = tonumber( new.maxreadlen ) or _maxreadlen
+	_checkinterval = tonumber( new.checkinterval ) or _checkinterval
+	_sendtimeout = tonumber( new.sendtimeout ) or _sendtimeout
+	_readtimeout = tonumber( new.readtimeout ) or _readtimeout
+	_cleanqueue = new.cleanqueue
+	_maxclientsperserver = new._maxclientsperserver or _maxclientsperserver
+	_maxsslhandshake = new._maxsslhandshake or _maxsslhandshake
+	return true
+end
+
+addtimer = function( listener )
+	if type( listener ) ~= "function" then
+		return nil, "invalid listener function"
+	end
+	_timerlistlen = _timerlistlen + 1
+	_timerlist[ _timerlistlen ] = listener
+	return true
+end
+
+stats = function( )
+	return _readtraffic, _sendtraffic, _readlistlen, _sendlistlen, _timerlistlen
+end
+
+local quitting;
+
+local function setquitting(quit)
+	quitting = not not quit;
+end
+
+loop = function(once) -- this is the main loop of the program
+	if quitting then return "quitting"; end
+	if once then quitting = "once"; end
+	local next_timer_time = math_huge;
+	repeat
+		local read, write, err = socket_select( _readlist, _sendlist, math_min(_selecttimeout, next_timer_time) )
+		for i, socket in ipairs( write ) do -- send data waiting in writequeues
+			local handler = _socketlist[ socket ]
+			if handler then
+				handler.sendbuffer( )
+			else
+				closesocket( socket )
+				out_put "server.lua: found no handler and closed socket (writelist)"	-- this should not happen
+			end
+		end
+		for i, socket in ipairs( read ) do -- receive data
+			local handler = _socketlist[ socket ]
+			if handler then
+				handler.readbuffer( )
+			else
+				closesocket( socket )
+				out_put "server.lua: found no handler and closed socket (readlist)" -- this can happen
+			end
+		end
+		for handler, err in pairs( _closelist ) do
+			handler.disconnect( )( handler, err )
+			handler:close( true )	 -- forced disconnect
+		end
+		clean( _closelist )
+		_currenttime = luasocket_gettime( )
+		if _currenttime - _timer >= math_min(next_timer_time, 1) then
+			next_timer_time = math_huge;
+			for i = 1, _timerlistlen do
+				local t = _timerlist[ i ]( _currenttime ) -- fire timers
+				if t then next_timer_time = math_min(next_timer_time, t); end
+			end
+			_timer = _currenttime
+		else
+			next_timer_time = next_timer_time - (_currenttime - _timer);
+		end
+		socket_sleep( _sleeptime ) -- wait some time
+		--collectgarbage( )
+	until quitting;
+	if once and quitting == "once" then quitting = nil; return; end
+	return "quitting"
+end
+
+local function step()
+	return loop(true);
+end
+
+local function get_backend()
+	return "select";
+end
+
+--// EXPERIMENTAL //--
+
+local wrapclient = function( socket, ip, serverport, listeners, pattern, sslctx )
+	local handler = wrapconnection( nil, listeners, socket, ip, serverport, "clientport", pattern, sslctx )
+	_socketlist[ socket ] = handler
+	if not sslctx then
+		_sendlistlen = addsocket(_sendlist, socket, _sendlistlen)
+		if listeners.onconnect then
+			-- When socket is writeable, call onconnect
+			local _sendbuffer = handler.sendbuffer;
+			handler.sendbuffer = function ()
+				_sendlistlen = removesocket( _sendlist, socket, _sendlistlen );
+				handler.sendbuffer = _sendbuffer;
+				listeners.onconnect(handler);
+				-- If there was data with the incoming packet, handle it now.
+				if #handler:bufferqueue() > 0 then
+					return _sendbuffer();
+				end
+			end
+		end
+	end
+	return handler, socket
+end
+
+local addclient = function( address, port, listeners, pattern, sslctx )
+	local client, err = luasocket.tcp( )
+	if err then
+		return nil, err
+	end
+	client:settimeout( 0 )
+	_, err = client:connect( address, port )
+	if err then -- try again
+		local handler = wrapclient( client, address, port, listeners )
+	else
+		wrapconnection( nil, listeners, client, address, port, "clientport", pattern, sslctx )
+	end
+end
+
+--// EXPERIMENTAL //--
+
+----------------------------------// BEGIN //--
+
+use "setmetatable" ( _socketlist, { __mode = "k" } )
+use "setmetatable" ( _readtimes, { __mode = "k" } )
+use "setmetatable" ( _writetimes, { __mode = "k" } )
+
+_timer = luasocket_gettime( )
+_starttime = luasocket_gettime( )
+
+addtimer( function( )
+		local difftime = os_difftime( _currenttime - _starttime )
+		if difftime > _checkinterval then
+			_starttime = _currenttime
+			for handler, timestamp in pairs( _writetimes ) do
+				if os_difftime( _currenttime - timestamp ) > _sendtimeout then
+					--_writetimes[ handler ] = nil
+					handler.disconnect( )( handler, "send timeout" )
+					handler:close( true )	 -- forced disconnect
+				end
+			end
+			for handler, timestamp in pairs( _readtimes ) do
+				if os_difftime( _currenttime - timestamp ) > _readtimeout then
+					--_readtimes[ handler ] = nil
+					handler.disconnect( )( handler, "read timeout" )
+					handler:close( )	-- forced disconnect?
+				end
+			end
+		end
+	end
 )
-end
-if q then
-e.starttls=function(f,u)
-if u then
-e:set_sslctx(u);
-end
-if c>0 then
-i"server.lua: we need to do tls, but delaying until send buffer empty"
-W=true
-return
-end
-i("server.lua: attempting to start tls on "..l(t))
-local u,c=t
-t,c=ye(t,z)
-if not t then
-i("server.lua: error while starting tls on client: ",l(c or"unknown error"))
-return nil,c
-end
-t:settimeout(0)
-y=t.send
-T=t.receive
-j=J
-n[t]=e
-a=m(r,t,a)
-a=h(r,u,a)
-o=h(d,u,o)
-n[u]=nil
-e.starttls=nil
-W=nil
-S=true
-e.readbuffer=s
-e.sendbuffer=s
-s(t)
-end
-e.readbuffer=b
-e.sendbuffer=w
-if z then
-i"server.lua: auto-starting ssl negotiation..."
-e.autostart_ssl=true;
-e:starttls(z);
-end
-else
-e.readbuffer=b
-e.sendbuffer=w
-end
-y=t.send
-T=t.receive
-j=(S and J)or t.shutdown
-n[t]=e
-a=m(r,t,a)
-return e,t
-end
-J=function()
-end
-G=function()
-return false
-end
-m=function(t,a,e)
-if not t[a]then
-e=e+1
-t[e]=a
-t[a]=e
-end
-return e;
-end
-h=function(e,a,t)
-local i=e[a]
-if i then
-e[a]=nil
-local o=e[t]
-e[t]=nil
-if o~=a then
-e[o]=i
-e[i]=o
-end
-return t-1
-end
-return t
-end
-Q=function(e)
-o=h(d,e,o)
-a=h(r,e,a)
-n[e]=nil
-e:close()
-end
-local function c(a,t,o)
-local e;
-local i=t.sendbuffer;
-function t.sendbuffer()
-i();
-if e and t.bufferlen()<o then
-a:lock_read(false);
-e=nil;
-end
-end
-local i=a.readbuffer;
-function a.readbuffer()
-i();
-if not e and t.bufferlen()>=o then
-e=true;
-a:lock_read(true);
-end
-end
-end
-ee=function(t,e,d,l,h)
-local o
-if R(d)~="table"then
-o="invalid listener table"
-end
-if R(e)~="number"or not(e>=0 and e<=65535)then
-o="invalid port"
-elseif v[t..":"..e]then
-o="listeners on '["..t.."]:"..e.."' already exist"
-elseif h and not q then
-o="luasec not found"
-end
-if o then
-se("server.lua, [",t,"]:",e,": ",o)
-return nil,o
-end
-t=t or"*"
-local o,s=we(t,e)
-if s then
-se("server.lua, [",t,"]:",e,": ",s)
-return nil,s
-end
-local s,d=ie(d,o,t,e,l,h,k)
-if not s then
-o:close()
-return nil,d
-end
-o:settimeout(0)
-a=m(r,o,a)
-v[t..":"..e]=s
-n[o]=s
-i("server.lua: new "..(h and"ssl "or"").."server listener on '[",t,"]:",e,"'")
-return s
-end
-oe=function(t,e)
-return v[t..":"..e];
-end
-te=function(t,e)
-local a=v[t..":"..e]
-if not a then
-return nil,"no server found on '["..t.."]:"..l(e).."'"
-end
-a:close()
-v[t..":"..e]=nil
-return true
-end
-Z=function()
-for t,e in j(n)do
-e:close()
-n[t]=nil
-end
-a=0
-o=0
-g=0
-v={}
-r={}
-d={}
-F={}
-n={}
-end
-ne=function()
-return N,S,E,_,T,O,A,U,k,I
-end
-ae=function(e)
-if R(e)~="table"then
-return nil,"invalid settings table"
-end
-N=p(e.timeout)or N
-S=p(e.sleeptime)or S
-E=p(e.maxsendlen)or E
-_=p(e.maxreadlen)or _
-T=p(e.checkinterval)or T
-O=p(e.sendtimeout)or O
-A=p(e.readtimeout)or A
-U=e.cleanqueue
-k=e._maxclientsperserver or k
-I=e._maxsslhandshake or I
-return true
-end
-B=function(e)
-if R(e)~="function"then
-return nil,"invalid listener function"
-end
-g=g+1
-F[g]=e
-return true
-end
-X=function()
-return C,M,a,o,g
-end
-local t;
-local function l(e)
-t=not not e;
-end
-V=function(a)
-if t then return"quitting";end
-if a then t="once";end
-local e=ue;
-repeat
-local a,o,s=me(r,d,W(N,e))
-for e,t in ce(o)do
-local e=n[t]
-if e then
-e.sendbuffer()
-else
-Q(t)
-i"server.lua: found no handler and closed socket (writelist)"
-end
-end
-for t,e in ce(a)do
-local t=n[e]
-if t then
-t.readbuffer()
-else
-Q(e)
-i"server.lua: found no handler and closed socket (readlist)"
-end
-end
-for e,t in j(x)do
-e.disconnect()(e,t)
-e:close(true)
-end
-re(x)
-u=P()
-if u-D>=W(e,1)then
-e=ue;
-for t=1,g do
-local t=F[t](u)
-if t then e=W(e,t);end
-end
-D=u
-else
-e=e-(u-D);
-end
-fe(S)
-until t;
-if a and t=="once"then t=nil;return;end
-return"quitting"
-end
-local function r()
-return V(true);
-end
-local function y()
-return"select";
-end
-local i=function(t,e,r,a,s,i)
-local e=L(nil,a,t,e,r,"clientport",s,i)
-n[t]=e
-if not i then
-o=m(d,t,o)
-if a.onconnect then
-local i=e.sendbuffer;
-e.sendbuffer=function()
-o=h(d,t,o);
-e.sendbuffer=i;
-a.onconnect(e);
-if#e:bufferqueue()>0 then
-return i();
-end
-end
-end
-end
-return e,t
-end
-local a=function(a,o,n,h,r)
-local t,e=z.tcp()
-if e then
-return nil,e
-end
-t:settimeout(0)
-f,e=t:connect(a,o)
-if e then
-local e=i(t,a,o,n)
-else
-L(nil,n,t,a,o,"clientport",h,r)
-end
-end
-s"setmetatable"(n,{__mode="k"})
-s"setmetatable"(b,{__mode="k"})
-s"setmetatable"(w,{__mode="k"})
-D=P()
-K=P()
-B(function()
-local e=Y(u-K)
-if e>T then
-K=u
-for e,t in j(w)do
-if Y(u-t)>O then
-e.disconnect()(e,"send timeout")
-e:close(true)
-end
-end
-for e,t in j(b)do
-if Y(u-t)>A then
-e.disconnect()(e,"read timeout")
-e:close()
-end
-end
-end
-end
-)
-local function t(e)
-local t=H;
-if e then
-H=e;
-end
-return t;
-end
-return{
-addclient=a,
-wrapclient=i,
-loop=V,
-link=c,
-step=r,
-stats=X,
-closeall=Z,
-addtimer=B,
-addserver=ee,
-getserver=oe,
-setlogger=t,
-getsettings=ne,
-setquitting=l,
-removeserver=te,
-get_backend=y,
-changesettings=ae,
+
+local function setlogger(new_logger)
+	local old_logger = log;
+	if new_logger then
+		log = new_logger;
+	end
+	return old_logger;
+end
+
+----------------------------------// PUBLIC INTERFACE //--
+
+return {
+
+	addclient = addclient,
+	wrapclient = wrapclient,
+	
+	loop = loop,
+	link = link,
+	step = step,
+	stats = stats,
+	closeall = closeall,
+	addtimer = addtimer,
+	addserver = addserver,
+	getserver = getserver,
+	setlogger = setlogger,
+	getsettings = getsettings,
+	setquitting = setquitting,
+	removeserver = removeserver,
+	get_backend = get_backend,
+	changesettings = changesettings,
 }
-end)
-package.preload['util.xmppstream']=(function(...)
-local e=require"lxp";
-local t=require"util.stanza";
-local m=t.stanza_mt;
-local o=tostring;
-local h=table.insert;
-local c=table.concat;
-local g=table.remove;
-local f=setmetatable;
-local u=require"util.logger".init("xmppstream");
-local p=pcall(e.new,{StartDoctypeDecl=false});
-if not p then
-u("warn","The version of LuaExpat on your system leaves Prosody "
-.."vulnerable to denial-of-service attacks. You should upgrade to "
-.."LuaExpat 1.1.1 or higher as soon as possible. See "
-.."http://prosody.im/doc/depends#luaexpat for more information.");
+ end)
+package.preload['util.xmppstream'] = (function (...)
+-- Prosody IM
+-- Copyright (C) 2008-2010 Matthew Wild
+-- Copyright (C) 2008-2010 Waqas Hussain
+-- 
+-- This project is MIT/X11 licensed. Please see the
+-- COPYING file in the source package for more information.
+--
+
+
+local lxp = require "lxp";
+local st = require "util.stanza";
+local stanza_mt = st.stanza_mt;
+
+local tostring = tostring;
+local t_insert = table.insert;
+local t_concat = table.concat;
+local t_remove = table.remove;
+local setmetatable = setmetatable;
+
+local default_log = require "util.logger".init("xmppstream");
+
+-- COMPAT: w/LuaExpat 1.1.0
+local lxp_supports_doctype = pcall(lxp.new, { StartDoctypeDecl = false });
+
+if not lxp_supports_doctype then
+	default_log("warn", "The version of LuaExpat on your system leaves Prosody "
+		.."vulnerable to denial-of-service attacks. You should upgrade to "
+		.."LuaExpat 1.1.1 or higher as soon as possible. See "
+		.."http://prosody.im/doc/depends#luaexpat for more information.");
 end
-local y=error;
-module"xmppstream"
-local w=e.new;
-local b={
-["http://www.w3.org/XML/1998/namespace"]="xml";
+
+local error = error;
+
+module "xmppstream"
+
+local new_parser = lxp.new;
+
+local ns_prefixes = {
+	["http://www.w3.org/XML/1998/namespace"] = "xml";
 };
-local a="http://etherx.jabber.org/streams";
-local s="\1";
-local l="^([^"..s.."]*)"..s.."?(.*)$";
-_M.ns_separator=s;
-_M.ns_pattern=l;
-function new_sax_handlers(t,e)
-local i={};
-local k=t.log or u;
-local v=e.streamopened;
-local w=e.streamclosed;
-local r=e.error or function(t,e)y("XML stream error: "..o(e));end;
-local q=e.handlestanza;
-local a=e.stream_ns or a;
-local d=e.stream_tag or"stream";
-if a~=""then
-d=a..s..d;
+
+local xmlns_streams = "http://etherx.jabber.org/streams";
+
+local ns_separator = "\1";
+local ns_pattern = "^([^"..ns_separator.."]*)"..ns_separator.."?(.*)$";
+
+_M.ns_separator = ns_separator;
+_M.ns_pattern = ns_pattern;
+
+function new_sax_handlers(session, stream_callbacks)
+	local xml_handlers = {};
+	
+	local log = session.log or default_log;
+	
+	local cb_streamopened = stream_callbacks.streamopened;
+	local cb_streamclosed = stream_callbacks.streamclosed;
+	local cb_error = stream_callbacks.error or function(session, e) error("XML stream error: "..tostring(e)); end;
+	local cb_handlestanza = stream_callbacks.handlestanza;
+	
+	local stream_ns = stream_callbacks.stream_ns or xmlns_streams;
+	local stream_tag = stream_callbacks.stream_tag or "stream";
+	if stream_ns ~= "" then
+		stream_tag = stream_ns..ns_separator..stream_tag;
+	end
+	local stream_error_tag = stream_ns..ns_separator..(stream_callbacks.error_tag or "error");
+	
+	local stream_default_ns = stream_callbacks.default_ns;
+	
+	local stack = {};
+	local chardata, stanza = {};
+	local non_streamns_depth = 0;
+	function xml_handlers:StartElement(tagname, attr)
+		if stanza and #chardata > 0 then
+			-- We have some character data in the buffer
+			t_insert(stanza, t_concat(chardata));
+			chardata = {};
+		end
+		local curr_ns,name = tagname:match(ns_pattern);
+		if name == "" then
+			curr_ns, name = "", curr_ns;
+		end
+
+		if curr_ns ~= stream_default_ns or non_streamns_depth > 0 then
+			attr.xmlns = curr_ns;
+			non_streamns_depth = non_streamns_depth + 1;
+		end
+		
+		-- FIXME !!!!!
+		for i=1,#attr do
+			local k = attr[i];
+			attr[i] = nil;
+			local ns, nm = k:match(ns_pattern);
+			if nm ~= "" then
+				ns = ns_prefixes[ns];
+				if ns then
+					attr[ns..":"..nm] = attr[k];
+					attr[k] = nil;
+				end
+			end
+		end
+		
+		if not stanza then --if we are not currently inside a stanza
+			if session.notopen then
+				if tagname == stream_tag then
+					non_streamns_depth = 0;
+					if cb_streamopened then
+						cb_streamopened(session, attr);
+					end
+				else
+					-- Garbage before stream?
+					cb_error(session, "no-stream");
+				end
+				return;
+			end
+			if curr_ns == "jabber:client" and name ~= "iq" and name ~= "presence" and name ~= "message" then
+				cb_error(session, "invalid-top-level-element");
+			end
+			
+			stanza = setmetatable({ name = name, attr = attr, tags = {} }, stanza_mt);
+		else -- we are inside a stanza, so add a tag
+			t_insert(stack, stanza);
+			local oldstanza = stanza;
+			stanza = setmetatable({ name = name, attr = attr, tags = {} }, stanza_mt);
+			t_insert(oldstanza, stanza);
+			t_insert(oldstanza.tags, stanza);
+		end
+	end
+	function xml_handlers:CharacterData(data)
+		if stanza then
+			t_insert(chardata, data);
+		end
+	end
+	function xml_handlers:EndElement(tagname)
+		if non_streamns_depth > 0 then
+			non_streamns_depth = non_streamns_depth - 1;
+		end
+		if stanza then
+			if #chardata > 0 then
+				-- We have some character data in the buffer
+				t_insert(stanza, t_concat(chardata));
+				chardata = {};
+			end
+			-- Complete stanza
+			if #stack == 0 then
+				if tagname ~= stream_error_tag then
+					cb_handlestanza(session, stanza);
+				else
+					cb_error(session, "stream-error", stanza);
+				end
+				stanza = nil;
+			else
+				stanza = t_remove(stack);
+			end
+		else
+			if tagname == stream_tag then
+				if cb_streamclosed then
+					cb_streamclosed(session);
+				end
+			else
+				local curr_ns,name = tagname:match(ns_pattern);
+				if name == "" then
+					curr_ns, name = "", curr_ns;
+				end
+				cb_error(session, "parse-error", "unexpected-element-close", name);
+			end
+			stanza, chardata = nil, {};
+			stack = {};
+		end
+	end
+
+	local function restricted_handler(parser)
+		cb_error(session, "parse-error", "restricted-xml", "Restricted XML, see RFC 6120 section 11.1.");
+		if not parser.stop or not parser:stop() then
+			error("Failed to abort parsing");
+		end
+	end
+	
+	if lxp_supports_doctype then
+		xml_handlers.StartDoctypeDecl = restricted_handler;
+	end
+	xml_handlers.Comment = restricted_handler;
+	xml_handlers.ProcessingInstruction = restricted_handler;
+	
+	local function reset()
+		stanza, chardata = nil, {};
+		stack = {};
+	end
+	
+	local function set_session(stream, new_session)
+		session = new_session;
+		log = new_session.log or default_log;
+	end
+	
+	return xml_handlers, { reset = reset, set_session = set_session };
 end
-local x=a..s..(e.error_tag or"error");
-local j=e.default_ns;
-local s={};
-local o,e={};
-local n=0;
-function i:StartElement(u,a)
-if e and#o>0 then
-h(e,c(o));
-o={};
+
+function new(session, stream_callbacks)
+	local handlers, meta = new_sax_handlers(session, stream_callbacks);
+	local parser = new_parser(handlers, ns_separator);
+	local parse = parser.parse;
+
+	return {
+		reset = function ()
+			parser = new_parser(handlers, ns_separator);
+			parse = parser.parse;
+			meta.reset();
+		end,
+		feed = function (self, data)
+			return parse(parser, data);
+		end,
+		set_session = meta.set_session;
+	};
 end
-local i,o=u:match(l);
-if o==""then
-i,o="",i;
-end
-if i~=j or n>0 then
-a.xmlns=i;
-n=n+1;
-end
-for e=1,#a do
-local t=a[e];
-a[e]=nil;
-local e,o=t:match(l);
-if o~=""then
-e=b[e];
-if e then
-a[e..":"..o]=a[t];
-a[t]=nil;
-end
-end
-end
-if not e then
-if t.notopen then
-if u==d then
-n=0;
-if v then
-v(t,a);
-end
-else
-r(t,"no-stream");
-end
-return;
-end
-if i=="jabber:client"and o~="iq"and o~="presence"and o~="message"then
-r(t,"invalid-top-level-element");
-end
-e=f({name=o,attr=a,tags={}},m);
-else
-h(s,e);
-local t=e;
-e=f({name=o,attr=a,tags={}},m);
-h(t,e);
-h(t.tags,e);
-end
-end
-function i:CharacterData(t)
-if e then
-h(o,t);
-end
-end
-function i:EndElement(a)
-if n>0 then
-n=n-1;
-end
-if e then
-if#o>0 then
-h(e,c(o));
-o={};
-end
-if#s==0 then
-if a~=x then
-q(t,e);
-else
-r(t,"stream-error",e);
-end
-e=nil;
-else
-e=g(s);
-end
-else
-if a==d then
-if w then
-w(t);
-end
-else
-local a,e=a:match(l);
-if e==""then
-a,e="",a;
-end
-r(t,"parse-error","unexpected-element-close",e);
-end
-e,o=nil,{};
-s={};
-end
-end
-local function a(e)
-r(t,"parse-error","restricted-xml","Restricted XML, see RFC 6120 section 11.1.");
-if not e.stop or not e:stop()then
-y("Failed to abort parsing");
-end
-end
-if p then
-i.StartDoctypeDecl=a;
-end
-i.Comment=a;
-i.ProcessingInstruction=a;
-local function a()
-e,o=nil,{};
-s={};
-end
-local function o(a,e)
-t=e;
-k=e.log or u;
-end
-return i,{reset=a,set_session=o};
-end
-function new(e,t)
-local t,a=new_sax_handlers(e,t);
-local e=w(t,s);
-local o=e.parse;
-return{
-reset=function()
-e=w(t,s);
-o=e.parse;
-a.reset();
-end,
-feed=function(a,t)
-return o(e,t);
-end,
-set_session=a.set_session;
-};
-end
+
 return _M;
-end)
-package.preload['util.jid']=(function(...)
-local a=string.match;
-local s=require"util.encodings".stringprep.nodeprep;
-local h=require"util.encodings".stringprep.nameprep;
-local r=require"util.encodings".stringprep.resourceprep;
-local n={
-[" "]="\\20";['"']="\\22";
-["&"]="\\26";["'"]="\\27";
-["/"]="\\2f";[":"]="\\3a";
-["<"]="\\3c";[">"]="\\3e";
-["@"]="\\40";["\\"]="\\5c";
+ end)
+package.preload['util.jid'] = (function (...)
+-- Prosody IM
+-- Copyright (C) 2008-2010 Matthew Wild
+-- Copyright (C) 2008-2010 Waqas Hussain
+-- 
+-- This project is MIT/X11 licensed. Please see the
+-- COPYING file in the source package for more information.
+--
+
+
+
+local match = string.match;
+local nodeprep = require "util.encodings".stringprep.nodeprep;
+local nameprep = require "util.encodings".stringprep.nameprep;
+local resourceprep = require "util.encodings".stringprep.resourceprep;
+
+local escapes = {
+	[" "] = "\\20"; ['"'] = "\\22";
+	["&"] = "\\26"; ["'"] = "\\27";
+	["/"] = "\\2f"; [":"] = "\\3a";
+	["<"] = "\\3c"; [">"] = "\\3e";
+	["@"] = "\\40"; ["\\"] = "\\5c";
 };
-local o={};
-for e,t in pairs(n)do o[t]=e;end
-module"jid"
-local function t(e)
-if not e then return;end
-local o,t=a(e,"^([^@/]+)@()");
-local t,i=a(e,"^([^@/]+)()",t)
-if o and not t then return nil,nil,nil;end
-local a=a(e,"^/(.+)$",i);
-if(not t)or((not a)and#e>=i)then return nil,nil,nil;end
-return o,t,a;
+local unescapes = {};
+for k,v in pairs(escapes) do unescapes[v] = k; end
+
+module "jid"
+
+local function _split(jid)
+	if not jid then return; end
+	local node, nodepos = match(jid, "^([^@/]+)@()");
+	local host, hostpos = match(jid, "^([^@/]+)()", nodepos)
+	if node and not host then return nil, nil, nil; end
+	local resource = match(jid, "^/(.+)$", hostpos);
+	if (not host) or ((not resource) and #jid >= hostpos) then return nil, nil, nil; end
+	return node, host, resource;
 end
-split=t;
-function bare(e)
-local t,e=t(e);
-if t and e then
-return t.."@"..e;
+split = _split;
+
+function bare(jid)
+	local node, host = _split(jid);
+	if node and host then
+		return node.."@"..host;
+	end
+	return host;
 end
-return e;
+
+local function _prepped_split(jid)
+	local node, host, resource = _split(jid);
+	if host then
+		host = nameprep(host);
+		if not host then return; end
+		if node then
+			node = nodeprep(node);
+			if not node then return; end
+		end
+		if resource then
+			resource = resourceprep(resource);
+			if not resource then return; end
+		end
+		return node, host, resource;
+	end
 end
-local function i(e)
-local a,e,t=t(e);
-if e then
-e=h(e);
-if not e then return;end
-if a then
-a=s(a);
-if not a then return;end
+prepped_split = _prepped_split;
+
+function prep(jid)
+	local node, host, resource = _prepped_split(jid);
+	if host then
+		if node then
+			host = node .. "@" .. host;
+		end
+		if resource then
+			host = host .. "/" .. resource;
+		end
+	end
+	return host;
 end
-if t then
-t=r(t);
-if not t then return;end
+
+function join(node, host, resource)
+	if node and host and resource then
+		return node.."@"..host.."/"..resource;
+	elseif node and host then
+		return node.."@"..host;
+	elseif host and resource then
+		return host.."/"..resource;
+	elseif host then
+		return host;
+	end
+	return nil; -- Invalid JID
 end
-return a,e,t;
+
+function compare(jid, acl)
+	-- compare jid to single acl rule
+	-- TODO compare to table of rules?
+	local jid_node, jid_host, jid_resource = _split(jid);
+	local acl_node, acl_host, acl_resource = _split(acl);
+	if ((acl_node ~= nil and acl_node == jid_node) or acl_node == nil) and
+		((acl_host ~= nil and acl_host == jid_host) or acl_host == nil) and
+		((acl_resource ~= nil and acl_resource == jid_resource) or acl_resource == nil) then
+		return true
+	end
+	return false
 end
-end
-prepped_split=i;
-function prep(e)
-local a,e,t=i(e);
-if e then
-if a then
-e=a.."@"..e;
-end
-if t then
-e=e.."/"..t;
-end
-end
-return e;
-end
-function join(a,e,t)
-if a and e and t then
-return a.."@"..e.."/"..t;
-elseif a and e then
-return a.."@"..e;
-elseif e and t then
-return e.."/"..t;
-elseif e then
-return e;
-end
-return nil;
-end
-function compare(a,e)
-local o,i,n=t(a);
-local e,a,t=t(e);
-if((e~=nil and e==o)or e==nil)and
-((a~=nil and a==i)or a==nil)and
-((t~=nil and t==n)or t==nil)then
-return true
-end
-return false
-end
-function escape(e)return e and(e:gsub(".",n));end
-function unescape(e)return e and(e:gsub("\\%x%x",o));end
+
+function escape(s) return s and (s:gsub(".", escapes)); end
+function unescape(s) return s and (s:gsub("\\%x%x", unescapes)); end
+
 return _M;
-end)
-package.preload['util.events']=(function(...)
-local i=pairs;
-local s=table.insert;
-local r=table.sort;
-local h=setmetatable;
-local n=next;
-module"events"
+ end)
+package.preload['util.events'] = (function (...)
+-- Prosody IM
+-- Copyright (C) 2008-2010 Matthew Wild
+-- Copyright (C) 2008-2010 Waqas Hussain
+-- 
+-- This project is MIT/X11 licensed. Please see the
+-- COPYING file in the source package for more information.
+--
+
+
+local pairs = pairs;
+local t_insert = table.insert;
+local t_sort = table.sort;
+local setmetatable = setmetatable;
+local next = next;
+
+module "events"
+
 function new()
-local t={};
-local e={};
-local function o(o,a)
-local e=e[a];
-if not e or n(e)==nil then return;end
-local t={};
-for e in i(e)do
-s(t,e);
+	local handlers = {};
+	local event_map = {};
+	local function _rebuild_index(handlers, event)
+		local _handlers = event_map[event];
+		if not _handlers or next(_handlers) == nil then return; end
+		local index = {};
+		for handler in pairs(_handlers) do
+			t_insert(index, handler);
+		end
+		t_sort(index, function(a, b) return _handlers[a] > _handlers[b]; end);
+		handlers[event] = index;
+		return index;
+	end;
+	setmetatable(handlers, { __index = _rebuild_index });
+	local function add_handler(event, handler, priority)
+		local map = event_map[event];
+		if map then
+			map[handler] = priority or 0;
+		else
+			map = {[handler] = priority or 0};
+			event_map[event] = map;
+		end
+		handlers[event] = nil;
+	end;
+	local function remove_handler(event, handler)
+		local map = event_map[event];
+		if map then
+			map[handler] = nil;
+			handlers[event] = nil;
+			if next(map) == nil then
+				event_map[event] = nil;
+			end
+		end
+	end;
+	local function add_handlers(handlers)
+		for event, handler in pairs(handlers) do
+			add_handler(event, handler);
+		end
+	end;
+	local function remove_handlers(handlers)
+		for event, handler in pairs(handlers) do
+			remove_handler(event, handler);
+		end
+	end;
+	local function fire_event(event, ...)
+		local h = handlers[event];
+		if h then
+			for i=1,#h do
+				local ret = h[i](...);
+				if ret ~= nil then return ret; end
+			end
+		end
+	end;
+	return {
+		add_handler = add_handler;
+		remove_handler = remove_handler;
+		add_handlers = add_handlers;
+		remove_handlers = remove_handlers;
+		fire_event = fire_event;
+		_handlers = handlers;
+		_event_map = event_map;
+	};
 end
-r(t,function(a,t)return e[a]>e[t];end);
-o[a]=t;
-return t;
-end;
-h(t,{__index=o});
-local function s(o,i,n)
-local a=e[o];
-if a then
-a[i]=n or 0;
-else
-a={[i]=n or 0};
-e[o]=a;
-end
-t[o]=nil;
-end;
-local function h(a,i)
-local o=e[a];
-if o then
-o[i]=nil;
-t[a]=nil;
-if n(o)==nil then
-e[a]=nil;
-end
-end
-end;
-local function o(e)
-for t,e in i(e)do
-s(t,e);
-end
-end;
-local function n(e)
-for e,t in i(e)do
-h(e,t);
-end
-end;
-local function a(e,...)
-local e=t[e];
-if e then
-for t=1,#e do
-local e=e[t](...);
-if e~=nil then return e;end
-end
-end
-end;
-return{
-add_handler=s;
-remove_handler=h;
-add_handlers=o;
-remove_handlers=n;
-fire_event=a;
-_handlers=t;
-_event_map=e;
-};
-end
+
 return _M;
-end)
-package.preload['util.dataforms']=(function(...)
-local e=setmetatable;
-local t,i=pairs,ipairs;
-local r,h,l=tostring,type,next;
-local s=table.concat;
-local u=require"util.stanza";
-local d=require"util.jid".prep;
-module"dataforms"
-local c='jabber:x:data';
-local n={};
-local t={__index=n};
-function new(a)
-return e(a,t);
+ end)
+package.preload['util.dataforms'] = (function (...)
+-- Prosody IM
+-- Copyright (C) 2008-2010 Matthew Wild
+-- Copyright (C) 2008-2010 Waqas Hussain
+-- 
+-- This project is MIT/X11 licensed. Please see the
+-- COPYING file in the source package for more information.
+--
+
+local setmetatable = setmetatable;
+local pairs, ipairs = pairs, ipairs;
+local tostring, type, next = tostring, type, next;
+local t_concat = table.concat;
+local st = require "util.stanza";
+local jid_prep = require "util.jid".prep;
+
+module "dataforms"
+
+local xmlns_forms = 'jabber:x:data';
+
+local form_t = {};
+local form_mt = { __index = form_t };
+
+function new(layout)
+	return setmetatable(layout, form_mt);
 end
-function from_stanza(e)
-local o={
-title=e:get_child_text("title");
-instructions=e:get_child_text("instructions");
+
+function from_stanza(stanza)
+	local layout = {
+		title = stanza:get_child_text("title");
+		instructions = stanza:get_child_text("instructions");
+	};
+	for tag in stanza:childtags("field") do
+		local field = {
+			name = tag.attr.var;
+			label = tag.attr.label;
+			type = tag.attr.type;
+			required = tag:get_child("required") and true or nil;
+			value = tag:get_child_text("value");
+		};
+		layout[#layout+1] = field;
+		if field.type then
+			local value = {};
+			if field.type:match"list%-" then
+				for tag in tag:childtags("option") do
+					value[#value+1] = { label = tag.attr.label, value = tag:get_child_text("value") };
+				end
+				for tag in tag:childtags("value") do
+					value[#value+1] = { label = tag.attr.label, value = tag:get_text(), default = true };
+				end
+			elseif field.type:match"%-multi" then
+				for tag in tag:childtags("value") do
+					value[#value+1] = tag.attr.label and { label = tag.attr.label, value = tag:get_text() } or tag:get_text();
+				end
+				if field.type == "text-multi" then
+					field.value = t_concat(value, "\n");
+				else
+					field.value = value;
+				end
+			end
+		end
+	end
+	return new(layout);
+end
+
+function form_t.form(layout, data, formtype)
+	local form = st.stanza("x", { xmlns = xmlns_forms, type = formtype or "form" });
+	if layout.title then
+		form:tag("title"):text(layout.title):up();
+	end
+	if layout.instructions then
+		form:tag("instructions"):text(layout.instructions):up();
+	end
+	for n, field in ipairs(layout) do
+		local field_type = field.type or "text-single";
+		-- Add field tag
+		form:tag("field", { type = field_type, var = field.name, label = field.label });
+
+		local value = (data and data[field.name]) or field.value;
+		
+		if value then
+			-- Add value, depending on type
+			if field_type == "hidden" then
+				if type(value) == "table" then
+					-- Assume an XML snippet
+					form:tag("value")
+						:add_child(value)
+						:up();
+				else
+					form:tag("value"):text(tostring(value)):up();
+				end
+			elseif field_type == "boolean" then
+				form:tag("value"):text((value and "1") or "0"):up();
+			elseif field_type == "fixed" then
+				
+			elseif field_type == "jid-multi" then
+				for _, jid in ipairs(value) do
+					form:tag("value"):text(jid):up();
+				end
+			elseif field_type == "jid-single" then
+				form:tag("value"):text(value):up();
+			elseif field_type == "text-single" or field_type == "text-private" then
+				form:tag("value"):text(value):up();
+			elseif field_type == "text-multi" then
+				-- Split into multiple <value> tags, one for each line
+				for line in value:gmatch("([^\r\n]+)\r?\n*") do
+					form:tag("value"):text(line):up();
+				end
+			elseif field_type == "list-single" then
+				local has_default = false;
+				for _, val in ipairs(value) do
+					if type(val) == "table" then
+						form:tag("option", { label = val.label }):tag("value"):text(val.value):up():up();
+						if val.default and (not has_default) then
+							form:tag("value"):text(val.value):up();
+							has_default = true;
+						end
+					else
+						form:tag("option", { label= val }):tag("value"):text(tostring(val)):up():up();
+					end
+				end
+			elseif field_type == "list-multi" then
+				for _, val in ipairs(value) do
+					if type(val) == "table" then
+						form:tag("option", { label = val.label }):tag("value"):text(val.value):up():up();
+						if val.default then
+							form:tag("value"):text(val.value):up();
+						end
+					else
+						form:tag("option", { label= val }):tag("value"):text(tostring(val)):up():up();
+					end
+				end
+			end
+		end
+		
+		if field.required then
+			form:tag("required"):up();
+		end
+		
+		-- Jump back up to list of fields
+		form:up();
+	end
+	return form;
+end
+
+local field_readers = {};
+
+function form_t.data(layout, stanza)
+	local data = {};
+	local errors = {};
+
+	for _, field in ipairs(layout) do
+		local tag;
+		for field_tag in stanza:childtags() do
+			if field.name == field_tag.attr.var then
+				tag = field_tag;
+				break;
+			end
+		end
+
+		if not tag then
+			if field.required then
+				errors[field.name] = "Required value missing";
+			end
+		else
+			local reader = field_readers[field.type];
+			if reader then
+				data[field.name], errors[field.name] = reader(tag, field.required);
+			end
+		end
+	end
+	if next(errors) then
+		return data, errors;
+	end
+	return data;
+end
+
+field_readers["text-single"] =
+	function (field_tag, required)
+		local data = field_tag:get_child_text("value");
+		if data and #data > 0 then
+			return data
+		elseif required then
+			return nil, "Required value missing";
+		end
+	end
+
+field_readers["text-private"] =
+	field_readers["text-single"];
+
+field_readers["jid-single"] =
+	function (field_tag, required)
+		local raw_data = field_tag:get_child_text("value")
+		local data = jid_prep(raw_data);
+		if data and #data > 0 then
+			return data
+		elseif raw_data then
+			return nil, "Invalid JID: " .. raw_data;
+		elseif required then
+			return nil, "Required value missing";
+		end
+	end
+
+field_readers["jid-multi"] =
+	function (field_tag, required)
+		local result = {};
+		local err = {};
+		for value_tag in field_tag:childtags("value") do
+			local raw_value = value_tag:get_text();
+			local value = jid_prep(raw_value);
+			result[#result+1] = value;
+			if raw_value and not value then
+				err[#err+1] = ("Invalid JID: " .. raw_value);
+			end
+		end
+		if #result > 0 then
+			return result, (#err > 0 and t_concat(err, "\n") or nil);
+		elseif required then
+			return nil, "Required value missing";
+		end
+	end
+
+field_readers["list-multi"] =
+	function (field_tag, required)
+		local result = {};
+		for value in field_tag:childtags("value") do
+			result[#result+1] = value:get_text();
+		end
+		return result, (required and #result == 0 and "Required value missing" or nil);
+	end
+
+field_readers["text-multi"] =
+	function (field_tag, required)
+		local data, err = field_readers["list-multi"](field_tag, required);
+		if data then
+			data = t_concat(data, "\n");
+		end
+		return data, err;
+	end
+
+field_readers["list-single"] =
+	field_readers["text-single"];
+
+local boolean_values = {
+	["1"] = true, ["true"] = true,
+	["0"] = false, ["false"] = false,
 };
-for t in e:childtags("field")do
-local a={
-name=t.attr.var;
-label=t.attr.label;
-type=t.attr.type;
-required=t:get_child("required")and true or nil;
-value=t:get_child_text("value");
-};
-o[#o+1]=a;
-if a.type then
-local e={};
-if a.type:match"list%-"then
-for t in t:childtags("option")do
-e[#e+1]={label=t.attr.label,value=t:get_child_text("value")};
-end
-for t in t:childtags("value")do
-e[#e+1]={label=t.attr.label,value=t:get_text(),default=true};
-end
-elseif a.type:match"%-multi"then
-for t in t:childtags("value")do
-e[#e+1]=t.attr.label and{label=t.attr.label,value=t:get_text()}or t:get_text();
-end
-if a.type=="text-multi"then
-a.value=s(e,"\n");
-else
-a.value=e;
-end
-end
-end
-end
-return new(o);
-end
-function n.form(t,a,e)
-local e=u.stanza("x",{xmlns=c,type=e or"form"});
-if t.title then
-e:tag("title"):text(t.title):up();
-end
-if t.instructions then
-e:tag("instructions"):text(t.instructions):up();
-end
-for t,o in i(t)do
-local t=o.type or"text-single";
-e:tag("field",{type=t,var=o.name,label=o.label});
-local a=(a and a[o.name])or o.value;
-if a then
-if t=="hidden"then
-if h(a)=="table"then
-e:tag("value")
-:add_child(a)
-:up();
-else
-e:tag("value"):text(r(a)):up();
-end
-elseif t=="boolean"then
-e:tag("value"):text((a and"1")or"0"):up();
-elseif t=="fixed"then
-elseif t=="jid-multi"then
-for a,t in i(a)do
-e:tag("value"):text(t):up();
-end
-elseif t=="jid-single"then
-e:tag("value"):text(a):up();
-elseif t=="text-single"or t=="text-private"then
-e:tag("value"):text(a):up();
-elseif t=="text-multi"then
-for t in a:gmatch("([^\r\n]+)\r?\n*")do
-e:tag("value"):text(t):up();
-end
-elseif t=="list-single"then
-local o=false;
-for a,t in i(a)do
-if h(t)=="table"then
-e:tag("option",{label=t.label}):tag("value"):text(t.value):up():up();
-if t.default and(not o)then
-e:tag("value"):text(t.value):up();
-o=true;
-end
-else
-e:tag("option",{label=t}):tag("value"):text(r(t)):up():up();
-end
-end
-elseif t=="list-multi"then
-for a,t in i(a)do
-if h(t)=="table"then
-e:tag("option",{label=t.label}):tag("value"):text(t.value):up():up();
-if t.default then
-e:tag("value"):text(t.value):up();
-end
-else
-e:tag("option",{label=t}):tag("value"):text(r(t)):up():up();
-end
-end
-end
-end
-if o.required then
-e:tag("required"):up();
-end
-e:up();
-end
-return e;
-end
-local e={};
-function n.data(t,s)
-local n={};
-local a={};
-for o,t in i(t)do
-local o;
-for e in s:childtags()do
-if t.name==e.attr.var then
-o=e;
-break;
-end
-end
-if not o then
-if t.required then
-a[t.name]="Required value missing";
-end
-else
-local e=e[t.type];
-if e then
-n[t.name],a[t.name]=e(o,t.required);
-end
-end
-end
-if l(a)then
-return n,a;
-end
-return n;
-end
-e["text-single"]=
-function(t,a)
-local t=t:get_child_text("value");
-if t and#t>0 then
-return t
-elseif a then
-return nil,"Required value missing";
-end
-end
-e["text-private"]=
-e["text-single"];
-e["jid-single"]=
-function(t,o)
-local a=t:get_child_text("value")
-local t=d(a);
-if t and#t>0 then
-return t
-elseif a then
-return nil,"Invalid JID: "..a;
-elseif o then
-return nil,"Required value missing";
-end
-end
-e["jid-multi"]=
-function(o,i)
-local t={};
-local a={};
-for e in o:childtags("value")do
-local e=e:get_text();
-local o=d(e);
-t[#t+1]=o;
-if e and not o then
-a[#a+1]=("Invalid JID: "..e);
-end
-end
-if#t>0 then
-return t,(#a>0 and s(a,"\n")or nil);
-elseif i then
-return nil,"Required value missing";
-end
-end
-e["list-multi"]=
-function(a,o)
-local t={};
-for e in a:childtags("value")do
-t[#t+1]=e:get_text();
-end
-return t,(o and#t==0 and"Required value missing"or nil);
-end
-e["text-multi"]=
-function(a,t)
-local t,a=e["list-multi"](a,t);
-if t then
-t=s(t,"\n");
-end
-return t,a;
-end
-e["list-single"]=
-e["text-single"];
-local a={
-["1"]=true,["true"]=true,
-["0"]=false,["false"]=false,
-};
-e["boolean"]=
-function(t,o)
-local t=t:get_child_text("value");
-local a=a[t~=nil and t];
-if a~=nil then
-return a;
-elseif t then
-return nil,"Invalid boolean representation";
-elseif o then
-return nil,"Required value missing";
-end
-end
-e["hidden"]=
-function(e)
-return e:get_child_text("value");
-end
+
+field_readers["boolean"] =
+	function (field_tag, required)
+		local raw_value = field_tag:get_child_text("value");
+		local value = boolean_values[raw_value ~= nil and raw_value];
+		if value ~= nil then
+			return value;
+		elseif raw_value then
+			return nil, "Invalid boolean representation";
+		elseif required then
+			return nil, "Required value missing";
+		end
+	end
+
+field_readers["hidden"] =
+	function (field_tag)
+		return field_tag:get_child_text("value");
+	end
+
 return _M;
-end)
-package.preload['util.caps']=(function(...)
-local l=require"util.encodings".base64.encode;
-local d=require"util.hashes".sha1;
-local n,h,s=table.insert,table.sort,table.concat;
-local r=ipairs;
-module"caps"
-function calculate_hash(e)
-local a,o,i={},{},{};
-for t,e in r(e)do
-if e.name=="identity"then
-n(a,(e.attr.category or"").."\0"..(e.attr.type or"").."\0"..(e.attr["xml:lang"]or"").."\0"..(e.attr.name or""));
-elseif e.name=="feature"then
-n(o,e.attr.var or"");
-elseif e.name=="x"and e.attr.xmlns=="jabber:x:data"then
-local t={};
-local o;
-for a,e in r(e.tags)do
-if e.name=="field"and e.attr.var then
-local a={};
-for t,e in r(e.tags)do
-e=#e.tags==0 and e:get_text();
-if e then n(a,e);end
-end
-h(a);
-if e.attr.var=="FORM_TYPE"then
-o=a[1];
-elseif#a>0 then
-n(t,e.attr.var.."\0"..s(a,"<"));
-else
-n(t,e.attr.var);
-end
-end
-end
-h(t);
-t=s(t,"<");
-if o then t=o.."\0"..t;end
-n(i,t);
-end
-end
-h(a);
-h(o);
-h(i);
-if#a>0 then a=s(a,"<"):gsub("%z","/").."<";else a="";end
-if#o>0 then o=s(o,"<").."<";else o="";end
-if#i>0 then i=s(i,"<"):gsub("%z","<").."<";else i="";end
-local e=a..o..i;
-local t=l(d(e));
-return t,e;
-end
-return _M;
-end)
-package.preload['util.vcard']=(function(...)
-local n=require"util.stanza";
-local a,d=table.insert,table.concat;
-local r=type;
-local e,h,f=next,pairs,ipairs;
-local l,c,u,m;
-local w="\n";
-local i;
-local function e()
-error"Not implemented"
-end
-local function e()
-error"Not implemented"
-end
-local function y(e)
-return e:gsub("[,:;\\]","\\%1"):gsub("\n","\\n");
-end
-local function p(e)
-return e:gsub("\\?[\\nt:;,]",{
-["\\\\"]="\\",
-["\\n"]="\n",
-["\\r"]="\r",
-["\\t"]="\t",
-["\\:"]=":",
-["\\;"]=";",
-["\\,"]=",",
-[":"]="\29",
-[";"]="\30",
-[","]="\31",
-});
-end
-local function s(t)
-local a=n.stanza(t.name,{xmlns="vcard-temp"});
-local e=i[t.name];
-if e=="text"then
-a:text(t[1]);
-elseif r(e)=="table"then
-if e.types and t.TYPE then
-if r(t.TYPE)=="table"then
-for o,e in h(e.types)do
-for o,t in h(t.TYPE)do
-if t:upper()==e then
-a:tag(e):up();
-break;
-end
-end
-end
-else
-a:tag(t.TYPE:upper()):up();
-end
-end
-if e.props then
-for o,e in h(e.props)do
-if t[e]then
-a:tag(e):up();
-end
-end
-end
-if e.value then
-a:tag(e.value):text(t[1]):up();
-elseif e.values then
-local o=e.values;
-local i=o.behaviour=="repeat-last"and o[#o];
-for o=1,#t do
-a:tag(e.values[o]or i):text(t[o]):up();
-end
-end
-end
-return a;
-end
-local function o(t)
-local e=n.stanza("vCard",{xmlns="vcard-temp"});
-for a=1,#t do
-e:add_child(s(t[a]));
-end
-return e;
-end
-function m(e)
-if not e[1]or e[1].name then
-return o(e)
-else
-local t=n.stanza("xCard",{xmlns="vcard-temp"});
-for a=1,#e do
-t:add_child(o(e[a]));
-end
-return t;
-end
-end
-function l(t)
-t=t
-:gsub("\r\n","\n")
-:gsub("\n ","")
-:gsub("\n\n+","\n");
-local h={};
-local e;
-for t in t:gmatch("[^\n]+")do
-local t=p(t);
-local s,t,n=t:match("^([-%a]+)(\30?[^\29]*)\29(.*)$");
-n=n:gsub("\29",":");
-if#t>0 then
-local o={};
-for a,i,n in t:gmatch("\30([^=]+)(=?)([^\30]*)")do
-a=a:upper();
-local e={};
-for t in n:gmatch("[^\31]+")do
-e[#e+1]=t
-e[t]=true;
-end
-if i=="="then
-o[a]=e;
-else
-o[a]=true;
-end
-end
-t=o;
-end
-if s=="BEGIN"and n=="VCARD"then
-e={};
-h[#h+1]=e;
-elseif s=="END"and n=="VCARD"then
-e=nil;
-elseif e and i[s]then
-local o=i[s];
-local i={name=s};
-e[#e+1]=i;
-local s=e;
-e=i;
-if o.types then
-for o,a in f(o.types)do
-local a=a:lower();
-if(t.TYPE and t.TYPE[a]==true)
-or t[a]==true then
-e.TYPE=a;
-end
-end
-end
-if o.props then
-for o,a in f(o.props)do
-if t[a]then
-if t[a]==true then
-e[a]=true;
-else
-for o,t in f(t[a])do
-e[a]=t;
-end
-end
-end
-end
-end
-if o=="text"or o.value then
-a(e,n);
-elseif o.values then
-local t="\30"..n;
-for t in t:gmatch("\30([^\30]*)")do
-a(e,t);
-end
-end
-e=s;
-end
-end
-return h;
-end
-local function n(t)
-local e={};
-for a=1,#t do
-e[a]=y(t[a]);
-end
-e=d(e,";");
-local a="";
-for t,e in h(t)do
-if r(t)=="string"and t~="name"then
-a=a..(";%s=%s"):format(t,r(e)=="table"and d(e,",")or e);
-end
-end
-return("%s%s:%s"):format(t.name,a,e)
-end
-local function o(t)
-local e={};
-a(e,"BEGIN:VCARD")
-for o=1,#t do
-a(e,n(t[o]));
-end
-a(e,"END:VCARD")
-return d(e,w);
-end
-function c(e)
-if e[1]and e[1].name then
-return o(e)
-else
-local t={};
-for a=1,#e do
-t[a]=o(e[a]);
-end
-return d(t,w);
-end
-end
-local function n(o)
-local t=o.name;
-local e=i[t];
-local t={name=t};
-if e=="text"then
-t[1]=o:get_text();
-elseif r(e)=="table"then
-if e.value then
-t[1]=o:get_child_text(e.value)or"";
-elseif e.values then
-local e=e.values;
-if e.behaviour=="repeat-last"then
-for e=1,#o.tags do
-a(t,o.tags[e]:get_text()or"");
-end
-else
-for i=1,#e do
-a(t,o:get_child_text(e[i])or"");
-end
-end
-elseif e.names then
-local e=e.names;
-for a=1,#e do
-if o:get_child(e[a])then
-t[1]=e[a];
-break;
-end
-end
-end
-if e.props_verbatim then
-for e,a in h(e.props_verbatim)do
-t[e]=a;
-end
-end
-if e.types then
-local e=e.types;
-t.TYPE={};
-for i=1,#e do
-if o:get_child(e[i])then
-a(t.TYPE,e[i]:lower());
-end
-end
-if#t.TYPE==0 then
-t.TYPE=nil;
-end
-end
-if e.props then
-local e=e.props;
-for i=1,#e do
-local e=e[i]
-local o=o:get_child_text(e);
-if o then
-t[e]=t[e]or{};
-a(t[e],o);
-end
-end
-end
-else
-return nil
-end
-return t;
-end
-local function o(e)
-local e=e.tags;
-local t={};
-for o=1,#e do
-a(t,n(e[o]));
-end
-return t
-end
-function u(e)
-if e.attr.xmlns~="vcard-temp"then
-return nil,"wrong-xmlns";
-end
-if e.name=="xCard"then
-local t={};
-local a=e.tags;
-for e=1,#a do
-t[e]=o(a[e]);
-end
-return t
-elseif e.name=="vCard"then
-return o(e)
-end
-end
-i={
-VERSION="text",
-FN="text",
-N={
-values={
-"FAMILY",
-"GIVEN",
-"MIDDLE",
-"PREFIX",
-"SUFFIX",
-},
-},
-NICKNAME="text",
-PHOTO={
-props_verbatim={ENCODING={"b"}},
-props={"TYPE"},
-value="BINVAL",
-},
-BDAY="text",
-ADR={
-types={
-"HOME",
-"WORK",
-"POSTAL",
-"PARCEL",
-"DOM",
-"INTL",
-"PREF",
-},
-values={
-"POBOX",
-"EXTADD",
-"STREET",
-"LOCALITY",
-"REGION",
-"PCODE",
-"CTRY",
+
+
+--[=[
+
+Layout:
+{
+
+	title = "MUC Configuration",
+	instructions = [[Use this form to configure options for this MUC room.]],
+
+	{ name = "FORM_TYPE", type = "hidden", required = true };
+	{ name = "field-name", type = "field-type", required = false };
 }
-},
-LABEL={
-types={
-"HOME",
-"WORK",
-"POSTAL",
-"PARCEL",
-"DOM",
-"INTL",
-"PREF",
-},
-value="LINE",
-},
-TEL={
-types={
-"HOME",
-"WORK",
-"VOICE",
-"FAX",
-"PAGER",
-"MSG",
-"CELL",
-"VIDEO",
-"BBS",
-"MODEM",
-"ISDN",
-"PCS",
-"PREF",
-},
-value="NUMBER",
-},
-EMAIL={
-types={
-"HOME",
-"WORK",
-"INTERNET",
-"PREF",
-"X400",
-},
-value="USERID",
-},
-JABBERID="text",
-MAILER="text",
-TZ="text",
-GEO={
-values={
-"LAT",
-"LON",
-},
-},
-TITLE="text",
-ROLE="text",
-LOGO="copy of PHOTO",
-AGENT="text",
-ORG={
-values={
-behaviour="repeat-last",
-"ORGNAME",
-"ORGUNIT",
-}
-},
-CATEGORIES={
-values="KEYWORD",
-},
-NOTE="text",
-PRODID="text",
-REV="text",
-SORTSTRING="text",
-SOUND="copy of PHOTO",
-UID="text",
-URL="text",
-CLASS={
-names={
-"PUBLIC",
-"PRIVATE",
-"CONFIDENTIAL",
-},
-},
-KEY={
-props={"TYPE"},
-value="CRED",
-},
-DESC="text",
+
+
+--]=]
+ end)
+package.preload['util.caps'] = (function (...)
+-- Prosody IM
+-- Copyright (C) 2008-2010 Matthew Wild
+-- Copyright (C) 2008-2010 Waqas Hussain
+-- 
+-- This project is MIT/X11 licensed. Please see the
+-- COPYING file in the source package for more information.
+--
+
+local base64 = require "util.encodings".base64.encode;
+local sha1 = require "util.hashes".sha1;
+
+local t_insert, t_sort, t_concat = table.insert, table.sort, table.concat;
+local ipairs = ipairs;
+
+module "caps"
+
+function calculate_hash(disco_info)
+	local identities, features, extensions = {}, {}, {};
+	for _, tag in ipairs(disco_info) do
+		if tag.name == "identity" then
+			t_insert(identities, (tag.attr.category or "").."\0"..(tag.attr.type or "").."\0"..(tag.attr["xml:lang"] or "").."\0"..(tag.attr.name or ""));
+		elseif tag.name == "feature" then
+			t_insert(features, tag.attr.var or "");
+		elseif tag.name == "x" and tag.attr.xmlns == "jabber:x:data" then
+			local form = {};
+			local FORM_TYPE;
+			for _, field in ipairs(tag.tags) do
+				if field.name == "field" and field.attr.var then
+					local values = {};
+					for _, val in ipairs(field.tags) do
+						val = #val.tags == 0 and val:get_text();
+						if val then t_insert(values, val); end
+					end
+					t_sort(values);
+					if field.attr.var == "FORM_TYPE" then
+						FORM_TYPE = values[1];
+					elseif #values > 0 then
+						t_insert(form, field.attr.var.."\0"..t_concat(values, "<"));
+					else
+						t_insert(form, field.attr.var);
+					end
+				end
+			end
+			t_sort(form);
+			form = t_concat(form, "<");
+			if FORM_TYPE then form = FORM_TYPE.."\0"..form; end
+			t_insert(extensions, form);
+		end
+	end
+	t_sort(identities);
+	t_sort(features);
+	t_sort(extensions);
+	if #identities > 0 then identities = t_concat(identities, "<"):gsub("%z", "/").."<"; else identities = ""; end
+	if #features > 0 then features = t_concat(features, "<").."<"; else features = ""; end
+	if #extensions > 0 then extensions = t_concat(extensions, "<"):gsub("%z", "<").."<"; else extensions = ""; end
+	local S = identities..features..extensions;
+	local ver = base64(sha1(S));
+	return ver, S;
+end
+
+return _M;
+ end)
+package.preload['util.vcard'] = (function (...)
+-- Copyright (C) 2011-2012 Kim Alvefur
+-- 
+-- This project is MIT/X11 licensed. Please see the
+-- COPYING file in the source package for more information.
+--
+
+-- TODO
+-- Fix folding.
+
+local st = require "util.stanza";
+local t_insert, t_concat = table.insert, table.concat;
+local type = type;
+local next, pairs, ipairs = next, pairs, ipairs;
+
+local from_text, to_text, from_xep54, to_xep54;
+
+local line_sep = "\n";
+
+local vCard_dtd; -- See end of file
+
+local function fold_line()
+	error "Not implemented" --TODO
+end
+local function unfold_line()
+	error "Not implemented"
+	-- gsub("\r?\n[ \t]([^\r\n])", "%1");
+end
+
+local function vCard_esc(s)
+	return s:gsub("[,:;\\]", "\\%1"):gsub("\n","\\n");
+end
+
+local function vCard_unesc(s)
+	return s:gsub("\\?[\\nt:;,]", {
+		["\\\\"] = "\\",
+		["\\n"] = "\n",
+		["\\r"] = "\r",
+		["\\t"] = "\t",
+		["\\:"] = ":", -- FIXME Shouldn't need to espace : in values, just params
+		["\\;"] = ";",
+		["\\,"] = ",",
+		[":"] = "\29",
+		[";"] = "\30",
+		[","] = "\31",
+	});
+end
+
+local function item_to_xep54(item)
+	local t = st.stanza(item.name, { xmlns = "vcard-temp" });
+
+	local prop_def = vCard_dtd[item.name];
+	if prop_def == "text" then
+		t:text(item[1]);
+	elseif type(prop_def) == "table" then
+		if prop_def.types and item.TYPE then
+			if type(item.TYPE) == "table" then
+				for _,v in pairs(prop_def.types) do
+					for _,typ in pairs(item.TYPE) do
+						if typ:upper() == v then
+							t:tag(v):up();
+							break;
+						end
+					end
+				end
+			else
+				t:tag(item.TYPE:upper()):up();
+			end
+		end
+
+		if prop_def.props then
+			for _,v in pairs(prop_def.props) do
+				if item[v] then
+					t:tag(v):up();
+				end
+			end
+		end
+
+		if prop_def.value then
+			t:tag(prop_def.value):text(item[1]):up();
+		elseif prop_def.values then
+			local prop_def_values = prop_def.values;
+			local repeat_last = prop_def_values.behaviour == "repeat-last" and prop_def_values[#prop_def_values];
+			for i=1,#item do
+				t:tag(prop_def.values[i] or repeat_last):text(item[i]):up();
+			end
+		end
+	end
+
+	return t;
+end
+
+local function vcard_to_xep54(vCard)
+	local t = st.stanza("vCard", { xmlns = "vcard-temp" });
+	for i=1,#vCard do
+		t:add_child(item_to_xep54(vCard[i]));
+	end
+	return t;
+end
+
+function to_xep54(vCards)
+	if not vCards[1] or vCards[1].name then
+		return vcard_to_xep54(vCards)
+	else
+		local t = st.stanza("xCard", { xmlns = "vcard-temp" });
+		for i=1,#vCards do
+			t:add_child(vcard_to_xep54(vCards[i]));
+		end
+		return t;
+	end
+end
+
+function from_text(data)
+	data = data -- unfold and remove empty lines
+		:gsub("\r\n","\n")
+		:gsub("\n ", "")
+		:gsub("\n\n+","\n");
+	local vCards = {};
+	local c; -- current item
+	for line in data:gmatch("[^\n]+") do
+		local line = vCard_unesc(line);
+		local name, params, value = line:match("^([-%a]+)(\30?[^\29]*)\29(.*)$");
+		value = value:gsub("\29",":");
+		if #params > 0 then
+			local _params = {};
+			for k,isval,v in params:gmatch("\30([^=]+)(=?)([^\30]*)") do
+				k = k:upper();
+				local _vt = {};
+				for _p in v:gmatch("[^\31]+") do
+					_vt[#_vt+1]=_p
+					_vt[_p]=true;
+				end
+				if isval == "=" then
+					_params[k]=_vt;
+				else
+					_params[k]=true;
+				end
+			end
+			params = _params;
+		end
+		if name == "BEGIN" and value == "VCARD" then
+			c = {};
+			vCards[#vCards+1] = c;
+		elseif name == "END" and value == "VCARD" then
+			c = nil;
+		elseif c and vCard_dtd[name] then
+			local dtd = vCard_dtd[name];
+			local p = { name = name };
+			c[#c+1]=p;
+			--c[name]=p;
+			local up = c;
+			c = p;
+			if dtd.types then
+				for _, t in ipairs(dtd.types) do
+					local t = t:lower();
+					if ( params.TYPE and params.TYPE[t] == true)
+							or params[t] == true then
+						c.TYPE=t;
+					end
+				end
+			end
+			if dtd.props then
+				for _, p in ipairs(dtd.props) do
+					if params[p] then
+						if params[p] == true then
+							c[p]=true;
+						else
+							for _, prop in ipairs(params[p]) do
+								c[p]=prop;
+							end
+						end
+					end
+				end
+			end
+			if dtd == "text" or dtd.value then
+				t_insert(c, value);
+			elseif dtd.values then
+				local value = "\30"..value;
+				for p in value:gmatch("\30([^\30]*)") do
+					t_insert(c, p);
+				end
+			end
+			c = up;
+		end
+	end
+	return vCards;
+end
+
+local function item_to_text(item)
+	local value = {};
+	for i=1,#item do
+		value[i] = vCard_esc(item[i]);
+	end
+	value = t_concat(value, ";");
+
+	local params = "";
+	for k,v in pairs(item) do
+		if type(k) == "string" and k ~= "name" then
+			params = params .. (";%s=%s"):format(k, type(v) == "table" and t_concat(v,",") or v);
+		end
+	end
+
+	return ("%s%s:%s"):format(item.name, params, value)
+end
+
+local function vcard_to_text(vcard)
+	local t={};
+	t_insert(t, "BEGIN:VCARD")
+	for i=1,#vcard do
+		t_insert(t, item_to_text(vcard[i]));
+	end
+	t_insert(t, "END:VCARD")
+	return t_concat(t, line_sep);
+end
+
+function to_text(vCards)
+	if vCards[1] and vCards[1].name then
+		return vcard_to_text(vCards)
+	else
+		local t = {};
+		for i=1,#vCards do
+			t[i]=vcard_to_text(vCards[i]);
+		end
+		return t_concat(t, line_sep);
+	end
+end
+
+local function from_xep54_item(item)
+	local prop_name = item.name;
+	local prop_def = vCard_dtd[prop_name];
+
+	local prop = { name = prop_name };
+
+	if prop_def == "text" then
+		prop[1] = item:get_text();
+	elseif type(prop_def) == "table" then
+		if prop_def.value then --single item
+			prop[1] = item:get_child_text(prop_def.value) or "";
+		elseif prop_def.values then --array
+			local value_names = prop_def.values;
+			if value_names.behaviour == "repeat-last" then
+				for i=1,#item.tags do
+					t_insert(prop, item.tags[i]:get_text() or "");
+				end
+			else
+				for i=1,#value_names do
+					t_insert(prop, item:get_child_text(value_names[i]) or "");
+				end
+			end
+		elseif prop_def.names then
+			local names = prop_def.names;
+			for i=1,#names do
+				if item:get_child(names[i]) then
+					prop[1] = names[i];
+					break;
+				end
+			end
+		end
+		
+		if prop_def.props_verbatim then
+			for k,v in pairs(prop_def.props_verbatim) do
+				prop[k] = v;
+			end
+		end
+
+		if prop_def.types then
+			local types = prop_def.types;
+			prop.TYPE = {};
+			for i=1,#types do
+				if item:get_child(types[i]) then
+					t_insert(prop.TYPE, types[i]:lower());
+				end
+			end
+			if #prop.TYPE == 0 then
+				prop.TYPE = nil;
+			end
+		end
+
+		-- A key-value pair, within a key-value pair?
+		if prop_def.props then
+			local params = prop_def.props;
+			for i=1,#params do
+				local name = params[i]
+				local data = item:get_child_text(name);
+				if data then
+					prop[name] = prop[name] or {};
+					t_insert(prop[name], data);
+				end
+			end
+		end
+	else
+		return nil
+	end
+
+	return prop;
+end
+
+local function from_xep54_vCard(vCard)
+	local tags = vCard.tags;
+	local t = {};
+	for i=1,#tags do
+		t_insert(t, from_xep54_item(tags[i]));
+	end
+	return t
+end
+
+function from_xep54(vCard)
+	if vCard.attr.xmlns ~= "vcard-temp" then
+		return nil, "wrong-xmlns";
+	end
+	if vCard.name == "xCard" then -- A collection of vCards
+		local t = {};
+		local vCards = vCard.tags;
+		for i=1,#vCards do
+			t[i] = from_xep54_vCard(vCards[i]);
+		end
+		return t
+	elseif vCard.name == "vCard" then -- A single vCard
+		return from_xep54_vCard(vCard)
+	end
+end
+
+-- This was adapted from http://xmpp.org/extensions/xep-0054.html#dtd
+vCard_dtd = {
+	VERSION = "text", --MUST be 3.0, so parsing is redundant
+	FN = "text",
+	N = {
+		values = {
+			"FAMILY",
+			"GIVEN",
+			"MIDDLE",
+			"PREFIX",
+			"SUFFIX",
+		},
+	},
+	NICKNAME = "text",
+	PHOTO = {
+		props_verbatim = { ENCODING = { "b" } },
+		props = { "TYPE" },
+		value = "BINVAL", --{ "EXTVAL", },
+	},
+	BDAY = "text",
+	ADR = {
+		types = {
+			"HOME",
+			"WORK", 
+			"POSTAL", 
+			"PARCEL", 
+			"DOM",
+			"INTL",
+			"PREF", 
+		},
+		values = {
+			"POBOX",
+			"EXTADD",
+			"STREET",
+			"LOCALITY",
+			"REGION",
+			"PCODE",
+			"CTRY",
+		}
+	},
+	LABEL = {
+		types = {
+			"HOME", 
+			"WORK", 
+			"POSTAL", 
+			"PARCEL", 
+			"DOM",
+			"INTL", 
+			"PREF", 
+		},
+		value = "LINE",
+	},
+	TEL = {
+		types = {
+			"HOME", 
+			"WORK", 
+			"VOICE", 
+			"FAX", 
+			"PAGER", 
+			"MSG", 
+			"CELL", 
+			"VIDEO", 
+			"BBS", 
+			"MODEM", 
+			"ISDN", 
+			"PCS", 
+			"PREF", 
+		},
+		value = "NUMBER",
+	},
+	EMAIL = {
+		types = {
+			"HOME", 
+			"WORK", 
+			"INTERNET", 
+			"PREF", 
+			"X400", 
+		},
+		value = "USERID",
+	},
+	JABBERID = "text",
+	MAILER = "text",
+	TZ = "text",
+	GEO = {
+		values = {
+			"LAT",
+			"LON",
+		},
+	},
+	TITLE = "text",
+	ROLE = "text",
+	LOGO = "copy of PHOTO",
+	AGENT = "text",
+	ORG = {
+		values = {
+			behaviour = "repeat-last",
+			"ORGNAME",
+			"ORGUNIT",
+		}
+	},
+	CATEGORIES = {
+		values = "KEYWORD",
+	},
+	NOTE = "text",
+	PRODID = "text",
+	REV = "text",
+	SORTSTRING = "text",
+	SOUND = "copy of PHOTO",
+	UID = "text",
+	URL = "text",
+	CLASS = {
+		names = { -- The item.name is the value if it's one of these.
+			"PUBLIC",
+			"PRIVATE",
+			"CONFIDENTIAL",
+		},
+	},
+	KEY = {
+		props = { "TYPE" },
+		value = "CRED",
+	},
+	DESC = "text",
 };
-i.LOGO=i.PHOTO;
-i.SOUND=i.PHOTO;
-return{
-from_text=l;
-to_text=c;
-from_xep54=u;
-to_xep54=m;
-lua_to_text=c;
-lua_to_xep54=m;
-text_to_lua=l;
-text_to_xep54=function(...)return m(l(...));end;
-xep54_to_lua=u;
-xep54_to_text=function(...)return c(u(...))end;
+vCard_dtd.LOGO = vCard_dtd.PHOTO;
+vCard_dtd.SOUND = vCard_dtd.PHOTO;
+
+return {
+	from_text = from_text;
+	to_text = to_text;
+
+	from_xep54 = from_xep54;
+	to_xep54 = to_xep54;
+
+	-- COMPAT:
+	lua_to_text = to_text;
+	lua_to_xep54 = to_xep54;
+
+	text_to_lua = from_text;
+	text_to_xep54 = function (...) return to_xep54(from_text(...)); end;
+
+	xep54_to_lua = from_xep54;
+	xep54_to_text = function (...) return to_text(from_xep54(...)) end;
 };
-end)
-package.preload['util.logger']=(function(...)
-local e=pcall;
-local e=string.find;
-local e,n,e=ipairs,pairs,setmetatable;
-module"logger"
-local e,t={},{};
-local a={};
-local o;
-function init(e)
-local s=o(e,"debug");
-local i=o(e,"info");
-local n=o(e,"warn");
-local a=o(e,"error");
-local e=#e;
-return function(e,t,...)
-if e=="debug"then
-return s(t,...);
-elseif e=="info"then
-return i(t,...);
-elseif e=="warn"then
-return n(t,...);
-elseif e=="error"then
-return a(t,...);
+ end)
+package.preload['util.logger'] = (function (...)
+-- Prosody IM
+-- Copyright (C) 2008-2010 Matthew Wild
+-- Copyright (C) 2008-2010 Waqas Hussain
+-- 
+-- This project is MIT/X11 licensed. Please see the
+-- COPYING file in the source package for more information.
+--
+
+local pcall = pcall;
+
+local find = string.find;
+local ipairs, pairs, setmetatable = ipairs, pairs, setmetatable;
+
+module "logger"
+
+local name_sinks, level_sinks = {}, {};
+local name_patterns = {};
+
+local make_logger;
+
+function init(name)
+	local log_debug = make_logger(name, "debug");
+	local log_info = make_logger(name, "info");
+	local log_warn = make_logger(name, "warn");
+	local log_error = make_logger(name, "error");
+
+	--name = nil; -- While this line is not commented, will automatically fill in file/line number info
+	local namelen = #name;
+	return function (level, message, ...)
+			if level == "debug" then
+				return log_debug(message, ...);
+			elseif level == "info" then
+				return log_info(message, ...);
+			elseif level == "warn" then
+				return log_warn(message, ...);
+			elseif level == "error" then
+				return log_error(message, ...);
+			end
+		end
 end
+
+function make_logger(source_name, level)
+	local level_handlers = level_sinks[level];
+	if not level_handlers then
+		level_handlers = {};
+		level_sinks[level] = level_handlers;
+	end
+
+	local source_handlers = name_sinks[source_name];
+	
+	local logger = function (message, ...)
+		if source_handlers then
+			for i = 1,#source_handlers do
+				if source_handlers[i](source_name, level, message, ...) == false then
+					return;
+				end
+			end
+		end
+		
+		for i = 1,#level_handlers do
+			level_handlers[i](source_name, level, message, ...);
+		end
+	end
+
+	return logger;
 end
-end
-function o(i,o)
-local a=t[o];
-if not a then
-a={};
-t[o]=a;
-end
-local e=e[i];
-local e=function(t,...)
-if e then
-for a=1,#e do
-if e[a](i,o,t,...)==false then
-return;
-end
-end
-end
-for e=1,#a do
-a[e](i,o,t,...);
-end
-end
-return e;
-end
+
 function reset()
-for t in n(e)do e[t]=nil;end
-for t,e in n(t)do
-for t=1,#e do
-e[t]=nil;
+	for k in pairs(name_sinks) do name_sinks[k] = nil; end
+	for level, handler_list in pairs(level_sinks) do
+		-- Clear all handlers for this level
+		for i = 1, #handler_list do
+			handler_list[i] = nil;
+		end
+	end
+	for k in pairs(name_patterns) do name_patterns[k] = nil; end
 end
+
+function add_level_sink(level, sink_function)
+	if not level_sinks[level] then
+		level_sinks[level] = { sink_function };
+	else
+		level_sinks[level][#level_sinks[level] + 1 ] = sink_function;
+	end
 end
-for e in n(a)do a[e]=nil;end
+
+function add_name_sink(name, sink_function, exclusive)
+	if not name_sinks[name] then
+		name_sinks[name] = { sink_function };
+	else
+		name_sinks[name][#name_sinks[name] + 1] = sink_function;
+	end
 end
-function add_level_sink(e,a)
-if not t[e]then
-t[e]={a};
-else
-t[e][#t[e]+1]=a;
+
+function add_name_pattern_sink(name_pattern, sink_function, exclusive)
+	if not name_patterns[name_pattern] then
+		name_patterns[name_pattern] = { sink_function };
+	else
+		name_patterns[name_pattern][#name_patterns[name_pattern] + 1] = sink_function;
+	end
 end
-end
-function add_name_sink(t,a,o)
-if not e[t]then
-e[t]={a};
-else
-e[t][#e[t]+1]=a;
-end
-end
-function add_name_pattern_sink(e,t,o)
-if not a[e]then
-a[e]={t};
-else
-a[e][#a[e]+1]=t;
-end
-end
-_M.new=o;
+
+_M.new = make_logger;
+
 return _M;
-end)
-package.preload['util.datetime']=(function(...)
-local e=os.date;
-local n=os.time;
-local u=os.difftime;
-local t=error;
-local r=tonumber;
-module"datetime"
+ end)
+package.preload['util.datetime'] = (function (...)
+-- Prosody IM
+-- Copyright (C) 2008-2010 Matthew Wild
+-- Copyright (C) 2008-2010 Waqas Hussain
+-- 
+-- This project is MIT/X11 licensed. Please see the
+-- COPYING file in the source package for more information.
+--
+
+
+-- XEP-0082: XMPP Date and Time Profiles
+
+local os_date = os.date;
+local os_time = os.time;
+local os_difftime = os.difftime;
+local error = error;
+local tonumber = tonumber;
+
+module "datetime"
+
 function date(t)
-return e("!%Y-%m-%d",t);
+	return os_date("!%Y-%m-%d", t);
 end
+
 function datetime(t)
-return e("!%Y-%m-%dT%H:%M:%SZ",t);
+	return os_date("!%Y-%m-%dT%H:%M:%SZ", t);
 end
+
 function time(t)
-return e("!%H:%M:%S",t);
+	return os_date("!%H:%M:%S", t);
 end
+
 function legacy(t)
-return e("!%Y%m%dT%H:%M:%S",t);
+	return os_date("!%Y%m%dT%H:%M:%S", t);
 end
-function parse(a)
-if a then
-local i,s,h,l,d,t,o;
-i,s,h,l,d,t,o=a:match("^(%d%d%d%d)-?(%d%d)-?(%d%d)T(%d%d):(%d%d):(%d%d)%.?%d*([Z+%-].*)$");
-if i then
-local u=u(n(e("*t")),n(e("!*t")));
-local a=0;
-if o~=""and o~="Z"then
-local o,t,e=o:match("([+%-])(%d%d):?(%d*)");
-if not o then return;end
-if#e~=2 then e="0";end
-t,e=r(t),r(e);
-a=t*60*60+e*60;
-if o=="-"then a=-a;end
+
+function parse(s)
+	if s then
+		local year, month, day, hour, min, sec, tzd;
+		year, month, day, hour, min, sec, tzd = s:match("^(%d%d%d%d)-?(%d%d)-?(%d%d)T(%d%d):(%d%d):(%d%d)%.?%d*([Z+%-].*)$");
+		if year then
+			local time_offset = os_difftime(os_time(os_date("*t")), os_time(os_date("!*t"))); -- to deal with local timezone
+			local tzd_offset = 0;
+			if tzd ~= "" and tzd ~= "Z" then
+				local sign, h, m = tzd:match("([+%-])(%d%d):?(%d*)");
+				if not sign then return; end
+				if #m ~= 2 then m = "0"; end
+				h, m = tonumber(h), tonumber(m);
+				tzd_offset = h * 60 * 60 + m * 60;
+				if sign == "-" then tzd_offset = -tzd_offset; end
+			end
+			sec = (sec + time_offset) - tzd_offset;
+			return os_time({year=year, month=month, day=day, hour=hour, min=min, sec=sec, isdst=false});
+		end
+	end
 end
-t=(t+u)-a;
-return n({year=i,month=s,day=h,hour=l,min=d,sec=t,isdst=false});
-end
-end
-end
+
 return _M;
-end)
-package.preload['verse.plugins.tls']=(function(...)
-local a=require"verse";
-local t="urn:ietf:params:xml:ns:xmpp-tls";
-function a.plugins.tls(e)
-local function i(o)
-if e.authenticated then return;end
-if o:get_child("starttls",t)and e.conn.starttls then
-e:debug("Negotiating TLS...");
-e:send(a.stanza("starttls",{xmlns=t}));
-return true;
-elseif not e.conn.starttls and not e.secure then
-e:warn("SSL libary (LuaSec) not loaded, so TLS not available");
-elseif not e.secure then
-e:debug("Server doesn't offer TLS :(");
+ end)
+package.preload['verse.plugins.tls'] = (function (...)
+local verse = require "verse";
+
+local xmlns_tls = "urn:ietf:params:xml:ns:xmpp-tls";
+
+function verse.plugins.tls(stream)
+	local function handle_features(features_stanza)
+		if stream.authenticated then return; end
+		if features_stanza:get_child("starttls", xmlns_tls) and stream.conn.starttls then
+			stream:debug("Negotiating TLS...");
+			stream:send(verse.stanza("starttls", { xmlns = xmlns_tls }));
+			return true;
+		elseif not stream.conn.starttls and not stream.secure then
+			stream:warn("SSL libary (LuaSec) not loaded, so TLS not available");
+		elseif not stream.secure then
+			stream:debug("Server doesn't offer TLS :(");
+		end
+	end
+	local function handle_tls(tls_status)
+		if tls_status.name == "proceed" then
+			stream:debug("Server says proceed, handshake starting...");
+			stream.conn:starttls({mode="client", protocol="sslv23", options="no_sslv2"}, true);
+		end
+	end
+	local function handle_status(new_status)
+		if new_status == "ssl-handshake-complete" then
+			stream.secure = true;
+			stream:debug("Re-opening stream...");
+			stream:reopen();
+		end
+	end
+	stream:hook("stream-features", handle_features, 400);
+	stream:hook("stream/"..xmlns_tls, handle_tls);
+	stream:hook("status", handle_status, 400);
+	
+	return true;
 end
+ end)
+package.preload['verse.plugins.sasl'] = (function (...)
+local base64 = require "mime".b64;
+local xmlns_sasl = "urn:ietf:params:xml:ns:xmpp-sasl";
+
+function verse.plugins.sasl(stream)
+	local function handle_features(features_stanza)
+		if stream.authenticated then return; end
+		stream:debug("Authenticating with SASL...");
+		--stream.sasl_state, initial_data = sasl_new({"PLAIN"}, stream.username, stream.password, stream.jid);
+		local mechanism , initial_data
+		if stream.username then
+			mechanism = "PLAIN"
+			initial_data = base64("\0"..stream.username.."\0"..stream.password);
+		else
+			mechanism = "ANONYMOUS"
+		end
+		stream:debug("Selecting %s mechanism...",mechanism);
+		local auth_stanza = verse.stanza("auth", { xmlns = xmlns_sasl, mechanism = mechanism });
+		if initial_data then
+			auth_stanza:text(initial_data);
+		end
+		stream:send(auth_stanza);
+		return true;
+	end
+	
+	local function handle_sasl(sasl_stanza)
+		if sasl_stanza.name == "success" then
+			stream.authenticated = true;
+			stream:event("authentication-success");
+		elseif sasl_stanza.name == "failure" then
+			local err = sasl_stanza.tags[1];
+			local text = sasl_stanza:get_child_text("text");
+			stream:event("authentication-failure", { condition = err.name, text = text });
+		end
+		stream:reopen();
+		return true;
+	end
+	
+	stream:hook("stream-features", handle_features, 300);
+	stream:hook("stream/"..xmlns_sasl, handle_sasl);
+	
+	return true;
 end
-local function a(t)
-if t.name=="proceed"then
-e:debug("Server says proceed, handshake starting...");
-e.conn:starttls({mode="client",protocol="sslv23",options="no_sslv2"},true);
+
+ end)
+package.preload['verse.plugins.bind'] = (function (...)
+local verse = require "verse";
+local jid = require "util.jid";
+
+local xmlns_bind = "urn:ietf:params:xml:ns:xmpp-bind";
+
+function verse.plugins.bind(stream)
+	local function handle_features(features)
+		if stream.bound then return; end
+		stream:debug("Binding resource...");
+		stream:send_iq(verse.iq({ type = "set" }):tag("bind", {xmlns=xmlns_bind}):tag("resource"):text(stream.resource),
+			function (reply)
+				if reply.attr.type == "result" then
+					local result_jid = reply
+						:get_child("bind", xmlns_bind)
+							:get_child_text("jid");
+					stream.username, stream.host, stream.resource = jid.split(result_jid);
+					stream.jid, stream.bound = result_jid, true;
+					stream:event("bind-success", { jid = result_jid });
+				elseif reply.attr.type == "error" then
+					local err = reply:child_with_name("error");
+					local type, condition, text = reply:get_error();
+					stream:event("bind-failure", { error = condition, text = text, type = type });
+				end
+			end);
+	end
+	stream:hook("stream-features", handle_features, 200);
+	return true;
 end
+ end)
+package.preload['verse.plugins.session'] = (function (...)
+local verse = require "verse";
+
+local xmlns_session = "urn:ietf:params:xml:ns:xmpp-session";
+
+function verse.plugins.session(stream)
+	
+	local function handle_features(features)
+		local session_feature = features:get_child("session", xmlns_session);
+		if session_feature and not session_feature:get_child("optional") then
+			local function handle_binding(jid)
+				stream:debug("Establishing Session...");
+				stream:send_iq(verse.iq({ type = "set" }):tag("session", {xmlns=xmlns_session}),
+					function (reply)
+						if reply.attr.type == "result" then
+							stream:event("session-success");
+						elseif reply.attr.type == "error" then
+							local err = reply:child_with_name("error");
+							local type, condition, text = reply:get_error();
+							stream:event("session-failure", { error = condition, text = text, type = type });
+						end
+					end);
+				return true;
+			end
+			stream:hook("bind-success", handle_binding);
+		end
+	end
+	stream:hook("stream-features", handle_features);
+	
+	return true;
 end
-local function o(t)
-if t=="ssl-handshake-complete"then
-e.secure=true;
-e:debug("Re-opening stream...");
-e:reopen();
+ end)
+package.preload['verse.plugins.legacy'] = (function (...)
+local verse = require "verse";
+local uuid = require "util.uuid".generate;
+
+local xmlns_auth = "jabber:iq:auth";
+
+function verse.plugins.legacy(stream)
+	function handle_auth_form(result)
+		local query = result:get_child("query", xmlns_auth);
+		if result.attr.type ~= "result" or not query then
+			local type, cond, text = result:get_error();
+                       stream:debug("warn", "%s %s: %s", type, cond, text);
+                       --stream:event("authentication-failure", { condition = cond });
+                       -- COMPAT continue anyways
+		end
+		local auth_data = {
+			username = stream.username;
+			password = stream.password;
+			resource = stream.resource or uuid();
+			digest = false, sequence = false, token = false;
+		};
+		local request = verse.iq({ to = stream.host, type = "set" })
+			:tag("query", { xmlns = xmlns_auth });
+               if #query > 0 then
+		for tag in query:childtags() do
+			local field = tag.name;
+			local value = auth_data[field];
+			if value then
+				request:tag(field):text(auth_data[field]):up();
+			elseif value == nil then
+				local cond = "feature-not-implemented";
+				stream:event("authentication-failure", { condition = cond });
+				return false;
+			end
+		end
+               else -- COMPAT for servers not following XEP 78
+                       for field, value in pairs(auth_data) do
+                               if value then
+                                       request:tag(field):text(value):up();
+                               end
+                       end
+               end
+		stream:send_iq(request, function (response)
+			if response.attr.type == "result" then
+				stream.resource = auth_data.resource;
+				stream.jid = auth_data.username.."@"..stream.host.."/"..auth_data.resource;
+				stream:event("authentication-success");
+				stream:event("bind-success", stream.jid);
+			else
+				local type, cond, text = response:get_error();
+				stream:event("authentication-failure", { condition = cond });
+			end
+		end);
+	end
+	
+	function handle_opened(attr)
+		if not attr.version then
+			stream:send_iq(verse.iq({type="get"})
+				:tag("query", { xmlns = "jabber:iq:auth" })
+					:tag("username"):text(stream.username),
+				handle_auth_form);
+				
+		end
+	end
+	stream:hook("opened", handle_opened);
 end
+ end)
+package.preload['verse.plugins.compression'] = (function (...)
+-- Copyright (C) 2009-2010 Matthew Wild
+-- Copyright (C) 2009-2010 Tobias Markmann
+-- 
+-- This project is MIT/X11 licensed. Please see the
+-- COPYING file in the source package for more information.
+--
+
+local verse = require "verse";
+local zlib = require "zlib";
+
+local xmlns_compression_feature = "http://jabber.org/features/compress"
+local xmlns_compression_protocol = "http://jabber.org/protocol/compress"
+local xmlns_stream = "http://etherx.jabber.org/streams";
+
+local compression_level = 9;
+
+-- returns either nil or a fully functional ready to use inflate stream
+local function get_deflate_stream(session)
+	local status, deflate_stream = pcall(zlib.deflate, compression_level);
+	if status == false then
+		local error_st = verse.stanza("failure", {xmlns=xmlns_compression_protocol}):tag("setup-failed");
+		session:send(error_st);
+		session:error("Failed to create zlib.deflate filter: %s", tostring(deflate_stream));
+		return
+	end
+	return deflate_stream
 end
-e:hook("stream-features",i,400);
-e:hook("stream/"..t,a);
-e:hook("status",o,400);
-return true;
+
+-- returns either nil or a fully functional ready to use inflate stream
+local function get_inflate_stream(session)
+	local status, inflate_stream = pcall(zlib.inflate);
+	if status == false then
+		local error_st = verse.stanza("failure", {xmlns=xmlns_compression_protocol}):tag("setup-failed");
+		session:send(error_st);
+		session:error("Failed to create zlib.inflate filter: %s", tostring(inflate_stream));
+		return
+	end
+	return inflate_stream
 end
-end)
-package.preload['verse.plugins.sasl']=(function(...)
-local i=require"mime".b64;
-local o="urn:ietf:params:xml:ns:xmpp-sasl";
-function verse.plugins.sasl(e)
-local function n(t)
-if e.authenticated then return;end
-e:debug("Authenticating with SASL...");
-local t,a
-if e.username then
-t="PLAIN"
-a=i("\0"..e.username.."\0"..e.password);
-else
-t="ANONYMOUS"
+
+-- setup compression for a stream
+local function setup_compression(session, deflate_stream)
+	function session:send(t)
+			--TODO: Better code injection in the sending process
+			local status, compressed, eof = pcall(deflate_stream, tostring(t), 'sync');
+			if status == false then
+				session:close({
+					condition = "undefined-condition";
+					text = compressed;
+					extra = verse.stanza("failure", {xmlns=xmlns_compression_protocol}):tag("processing-failed");
+				});
+				session:warn("Compressed send failed: %s", tostring(compressed));
+				return;
+			end
+			session.conn:write(compressed);
+		end;	
 end
-e:debug("Selecting %s mechanism...",t);
-local t=verse.stanza("auth",{xmlns=o,mechanism=t});
-if a then
-t:text(a);
+
+-- setup decompression for a stream
+local function setup_decompression(session, inflate_stream)
+	local old_data = session.data
+	session.data = function(conn, data)
+			session:debug("Decompressing data...");
+			local status, decompressed, eof = pcall(inflate_stream, data);
+			if status == false then
+				session:close({
+					condition = "undefined-condition";
+					text = decompressed;
+					extra = verse.stanza("failure", {xmlns=xmlns_compression_protocol}):tag("processing-failed");
+				});
+				stream:warn("%s", tostring(decompressed));
+				return;
+			end
+			return old_data(conn, decompressed);
+		end;
 end
-e:send(t);
-return true;
+
+function verse.plugins.compression(stream)
+	local function handle_features(features)
+		if not stream.compressed then
+			-- does remote server support compression?
+			local comp_st = features:child_with_name("compression");
+			if comp_st then
+				-- do we support the mechanism
+				for a in comp_st:children() do
+					local algorithm = a[1]
+					if algorithm == "zlib" then
+						stream:send(verse.stanza("compress", {xmlns=xmlns_compression_protocol}):tag("method"):text("zlib"))
+						stream:debug("Enabled compression using zlib.")
+						return true;
+					end
+				end
+				session:debug("Remote server supports no compression algorithm we support.")
+			end
+		end
+	end
+	local function handle_compressed(stanza)
+		if stanza.name == "compressed" then
+			stream:debug("Activating compression...")
+
+			-- create deflate and inflate streams
+			local deflate_stream = get_deflate_stream(stream);
+			if not deflate_stream then return end
+			
+			local inflate_stream = get_inflate_stream(stream);
+			if not inflate_stream then return end
+			
+			-- setup compression for stream.w
+			setup_compression(stream, deflate_stream);
+				
+			-- setup decompression for stream.data
+			setup_decompression(stream, inflate_stream);
+			
+			stream.compressed = true;
+			stream:reopen();
+		elseif stanza.name == "failure" then
+			stream:warn("Failed to establish compression");
+		end
+	end
+	stream:hook("stream-features", handle_features, 250);
+	stream:hook("stream/"..xmlns_compression_protocol, handle_compressed);
 end
-local function i(t)
-if t.name=="success"then
-e.authenticated=true;
-e:event("authentication-success");
-elseif t.name=="failure"then
-local a=t.tags[1];
-local t=t:get_child_text("text");
-e:event("authentication-failure",{condition=a.name,text=t});
+ end)
+package.preload['verse.plugins.smacks'] = (function (...)
+local verse = require "verse";
+local now = socket.gettime;
+
+local xmlns_sm = "urn:xmpp:sm:2";
+
+function verse.plugins.smacks(stream)
+	-- State for outgoing stanzas
+	local outgoing_queue = {};
+	local last_ack = 0;
+	local last_stanza_time = now();
+	local timer_active;
+	
+	-- State for incoming stanzas
+	local handled_stanza_count = 0;
+	
+	-- Catch incoming stanzas
+	local function incoming_stanza(stanza)
+		if stanza.attr.xmlns == "jabber:client" or not stanza.attr.xmlns then
+			handled_stanza_count = handled_stanza_count + 1;
+			stream:debug("Increasing handled stanzas to %d for %s", handled_stanza_count, stanza:top_tag());
+		end
+	end
+
+	-- Catch outgoing stanzas
+	function outgoing_stanza(stanza)
+		-- NOTE: This will not behave nice if stanzas are serialized before this point
+		if stanza.name and not stanza.attr.xmlns then
+			-- serialize stanzas in order to bypass this on resumption
+			outgoing_queue[#outgoing_queue+1] = tostring(stanza);
+			last_stanza_time = now();
+			if not timer_active then
+				timer_active = true;
+				stream:debug("Waiting to send ack request...");
+				verse.add_task(1, function()
+					if #outgoing_queue == 0 then
+						timer_active = false;
+						return;
+					end
+					local time_since_last_stanza = now() - last_stanza_time;
+					if time_since_last_stanza < 1 and #outgoing_queue < 10 then
+						return 1 - time_since_last_stanza;
+					end
+					stream:debug("Time up, sending <r>...");
+					timer_active = false;
+					stream:send(verse.stanza("r", { xmlns = xmlns_sm }));
+				end);
+			end
+		end
+	end
+
+	local function on_disconnect()
+		stream:debug("smacks: connection lost");
+		stream.stream_management_supported = nil;
+		if stream.resumption_token then
+			stream:debug("smacks: have resumption token, reconnecting in 1s...");
+			stream.authenticated = nil;
+			verse.add_task(1, function ()
+				stream:connect(stream.connect_host or stream.host, stream.connect_port or 5222);
+			end);
+			return true;
+		end
+	end	
+
+	-- Graceful shutdown
+	local function on_close()
+		stream.resumption_token = nil;
+		stream:unhook("disconnected", on_disconnect);
+	end
+	
+	local function handle_sm_command(stanza)
+		if stanza.name == "r" then -- Request for acks for stanzas we received
+			stream:debug("Ack requested... acking %d handled stanzas", handled_stanza_count);
+			stream:send(verse.stanza("a", { xmlns = xmlns_sm, h = tostring(handled_stanza_count) }));
+		elseif stanza.name == "a" then -- Ack for stanzas we sent
+			local new_ack = tonumber(stanza.attr.h);
+			if new_ack > last_ack then
+				local old_unacked = #outgoing_queue;
+				for i=last_ack+1,new_ack do
+					table.remove(outgoing_queue, 1);
+				end
+				stream:debug("Received ack: New ack: "..new_ack.." Last ack: "..last_ack.." Unacked stanzas now: "..#outgoing_queue.." (was "..old_unacked..")");
+				last_ack = new_ack;
+			else
+				stream:warn("Received bad ack for "..new_ack.." when last ack was "..last_ack);
+			end
+		elseif stanza.name == "enabled" then
+
+			if stanza.attr.id then
+				stream.resumption_token = stanza.attr.id;
+				stream:hook("closed", on_close, 100);
+				stream:hook("disconnected", on_disconnect, 100);
+			end
+		elseif stanza.name == "resumed" then
+			local new_ack = tonumber(stanza.attr.h);
+			if new_ack > last_ack then
+				local old_unacked = #outgoing_queue;
+				for i=last_ack+1,new_ack do
+					table.remove(outgoing_queue, 1);
+				end
+				stream:debug("Received ack: New ack: "..new_ack.." Last ack: "..last_ack.." Unacked stanzas now: "..#outgoing_queue.." (was "..old_unacked..")");
+				last_ack = new_ack;
+			end
+			for i=1,#outgoing_queue do
+				stream:send(outgoing_queue[i]);
+			end
+			outgoing_queue = {};
+			stream:debug("Resumed successfully");
+			stream:event("resumed");
+		else
+			stream:warn("Don't know how to handle "..xmlns_sm.."/"..stanza.name);
+		end
+	end
+
+	local function on_bind_success()
+		if not stream.smacks then
+			--stream:unhook("bind-success", on_bind_success);
+			stream:debug("smacks: sending enable");
+			stream:send(verse.stanza("enable", { xmlns = xmlns_sm, resume = "true" }));
+			stream.smacks = true;
+
+			-- Catch stanzas
+			stream:hook("stanza", incoming_stanza);
+			stream:hook("outgoing", outgoing_stanza);
+		end
+	end
+
+	local function on_features(features)
+		if features:get_child("sm", xmlns_sm) then
+			stream.stream_management_supported = true;
+			if stream.smacks and stream.bound then -- Already enabled in a previous session - resume
+				stream:debug("Resuming stream with %d handled stanzas", handled_stanza_count);
+				stream:send(verse.stanza("resume", { xmlns = xmlns_sm,
+					h = handled_stanza_count, previd = stream.resumption_token }));
+				return true;
+			else
+				stream:hook("bind-success", on_bind_success, 1);
+			end
+		end
+	end
+
+	stream:hook("stream-features", on_features, 250);
+	stream:hook("stream/"..xmlns_sm, handle_sm_command);
+	--stream:hook("ready", on_stream_ready, 500);
 end
-e:reopen();
-return true;
+ end)
+package.preload['verse.plugins.keepalive'] = (function (...)
+local verse = require "verse";
+
+function verse.plugins.keepalive(stream)
+	stream.keepalive_timeout = stream.keepalive_timeout or 300;
+	verse.add_task(stream.keepalive_timeout, function ()
+		stream.conn:write(" ");
+		return stream.keepalive_timeout;
+	end);
 end
-e:hook("stream-features",n,300);
-e:hook("stream/"..o,i);
-return true;
+ end)
+package.preload['verse.plugins.disco'] = (function (...)
+-- Verse XMPP Library
+-- Copyright (C) 2010 Hubert Chathi <hubert@uhoreg.ca>
+-- Copyright (C) 2010 Matthew Wild <mwild1@gmail.com>
+-- 
+-- This project is MIT/X11 licensed. Please see the
+-- COPYING file in the source package for more information.
+--
+
+local verse = require "verse";
+local b64 = require("mime").b64;
+local sha1 = require("util.sha1").sha1;
+
+local xmlns_caps = "http://jabber.org/protocol/caps";
+local xmlns_disco = "http://jabber.org/protocol/disco";
+local xmlns_disco_info = xmlns_disco.."#info";
+local xmlns_disco_items = xmlns_disco.."#items";
+
+function verse.plugins.disco(stream)
+	stream:add_plugin("presence");
+	local disco_info_mt = {
+		__index = function(t, k)
+			local node = { identities = {}, features = {} };
+			if k == "identities" or k == "features" then
+				return t[false][k]
+			end
+			t[k] = node;
+			return node;
+		end,
+	};
+	local disco_items_mt = {
+		__index = function(t, k)
+			local node = { };
+			t[k] = node;
+			return node;
+		end,
+	};
+	stream.disco = {
+		cache = {},
+		info = setmetatable({
+			[false] = {
+				identities = {
+					{category = 'client', type='pc', name='Verse'},
+				},
+				features = {
+					[xmlns_caps] = true,
+					[xmlns_disco_info] = true,
+					[xmlns_disco_items] = true,
+				},
+			},
+		}, disco_info_mt);
+		items = setmetatable({[false]={}}, disco_items_mt);
+	};
+
+	stream.caps = {}
+	stream.caps.node = 'http://code.matthewwild.co.uk/verse/'
+
+	local function cmp_identity(item1, item2)
+		if item1.category < item2.category then
+			return true;
+		elseif item2.category < item1.category then
+			return false;
+		end
+		if item1.type < item2.type then
+			return true;
+		elseif item2.type < item1.type then
+			return false;
+		end
+		if (not item1['xml:lang'] and item2['xml:lang']) or
+			 (item2['xml:lang'] and item1['xml:lang'] < item2['xml:lang']) then
+			return true
+		end
+		return false
+	end
+
+	local function cmp_feature(item1, item2)
+		return item1.var < item2.var
+	end
+
+	local function calculate_hash(node)
+		local identities = stream.disco.info[node or false].identities;
+		table.sort(identities, cmp_identity)
+		local features = {};
+		for var in pairs(stream.disco.info[node or false].features) do
+			features[#features+1] = { var = var };
+		end
+		table.sort(features, cmp_feature)
+		local S = {};
+		for key,identity in pairs(identities) do
+			S[#S+1] = table.concat({
+				identity.category, identity.type or '',
+				identity['xml:lang'] or '', identity.name or ''
+			}, '/');
+		end
+		for key,feature in pairs(features) do
+			S[#S+1] = feature.var
+		end
+		S[#S+1] = '';
+		S = table.concat(S,'<');
+		-- FIXME: make sure S is utf8-encoded
+		--stream:debug("Computed hash string: "..S);
+		--stream:debug("Computed hash string (sha1): "..sha1(S, true));
+		--stream:debug("Computed hash string (sha1+b64): "..b64(sha1(S)));
+		return (b64(sha1(S)))
+	end
+
+	setmetatable(stream.caps, {
+		__call = function (...) -- vararg: allow calling as function or member
+			-- retrieve the c stanza to insert into the
+			-- presence stanza
+			local hash = calculate_hash()
+			stream.caps.hash = hash;
+			-- TODO proper caching.... some day
+			return verse.stanza('c', {
+				xmlns = xmlns_caps,
+				hash = 'sha-1',
+				node = stream.caps.node,
+				ver = hash
+			})
+		end
+	})
+	
+	function stream:set_identity(identity, node)
+		self.disco.info[node or false].identities = { identity };
+		stream:resend_presence();
+	end
+
+	function stream:add_identity(identity, node)
+		local identities = self.disco.info[node or false].identities;
+		identities[#identities + 1] = identity;
+		stream:resend_presence();
+	end
+
+	function stream:add_disco_feature(feature, node)
+		local feature = feature.var or feature;
+		self.disco.info[node or false].features[feature] = true;
+		stream:resend_presence();
+	end
+	
+	function stream:remove_disco_feature(feature, node)
+		local feature = feature.var or feature;
+		self.disco.info[node or false].features[feature] = nil;
+		stream:resend_presence();
+	end
+
+	function stream:add_disco_item(item, node)
+		local items = self.disco.items[node or false];
+		items[#items +1] = item;
+	end
+
+	function stream:remove_disco_item(item, node)
+		local items = self.disco.items[node or false];
+		for i=#items,1,-1 do
+			if items[i] == item then
+				table.remove(items, i);
+			end
+		end
+	end
+
+	-- TODO Node?
+	function stream:jid_has_identity(jid, category, type)
+		local cached_disco = self.disco.cache[jid];
+		if not cached_disco then
+			return nil, "no-cache";
+		end
+		local identities = self.disco.cache[jid].identities;
+		if type then
+			return identities[category.."/"..type] or false;
+		end
+		-- Check whether we have any identities with this category instead
+		for identity in pairs(identities) do
+			if identity:match("^(.*)/") == category then
+				return true;
+			end
+		end
+	end
+
+	function stream:jid_supports(jid, feature)
+		local cached_disco = self.disco.cache[jid];
+		if not cached_disco or not cached_disco.features then
+			return nil, "no-cache";
+		end
+		return cached_disco.features[feature] or false;
+	end
+	
+	function stream:get_local_services(category, type)
+		local host_disco = self.disco.cache[self.host];
+		if not(host_disco) or not(host_disco.items) then
+			return nil, "no-cache";
+		end
+		
+		local results = {};
+		for _, service in ipairs(host_disco.items) do
+			if self:jid_has_identity(service.jid, category, type) then
+				table.insert(results, service.jid);
+			end
+		end
+		return results;
+	end
+	
+	function stream:disco_local_services(callback)
+		self:disco_items(self.host, nil, function (items)
+			if not items then
+				return callback({});
+			end
+			local n_items = 0;
+			local function item_callback()
+				n_items = n_items - 1;
+				if n_items == 0 then
+					return callback(items);
+				end
+			end
+			
+			for _, item in ipairs(items) do
+				if item.jid then
+					n_items = n_items + 1;
+					self:disco_info(item.jid, nil, item_callback);
+				end
+			end
+			if n_items == 0 then
+				return callback(items);
+			end
+		end);
+	end
+	
+	function stream:disco_info(jid, node, callback)
+		local disco_request = verse.iq({ to = jid, type = "get" })
+			:tag("query", { xmlns = xmlns_disco_info, node = node });
+		self:send_iq(disco_request, function (result)
+			if result.attr.type == "error" then
+				return callback(nil, result:get_error());
+			end
+			
+			local identities, features = {}, {};
+			
+			for tag in result:get_child("query", xmlns_disco_info):childtags() do
+				if tag.name == "identity" then
+					identities[tag.attr.category.."/"..tag.attr.type] = tag.attr.name or true;
+				elseif tag.name == "feature" then
+					features[tag.attr.var] = true;
+				end
+			end
+			
+
+			if not self.disco.cache[jid] then
+				self.disco.cache[jid] = { nodes = {} };
+			end
+
+			if node then
+				if not self.disco.cache[jid].nodes[node] then
+					self.disco.cache[jid].nodes[node] = { nodes = {} };
+				end
+				self.disco.cache[jid].nodes[node].identities = identities;
+				self.disco.cache[jid].nodes[node].features = features;
+			else
+				self.disco.cache[jid].identities = identities;
+				self.disco.cache[jid].features = features;
+			end
+			return callback(self.disco.cache[jid]);
+		end);
+	end
+	
+	function stream:disco_items(jid, node, callback)
+		local disco_request = verse.iq({ to = jid, type = "get" })
+			:tag("query", { xmlns = xmlns_disco_items, node = node });
+		self:send_iq(disco_request, function (result)
+			if result.attr.type == "error" then
+				return callback(nil, result:get_error());
+			end
+			local disco_items = { };
+			for tag in result:get_child("query", xmlns_disco_items):childtags() do
+				if tag.name == "item" then
+					table.insert(disco_items, {
+						name = tag.attr.name;
+						jid = tag.attr.jid;
+						node = tag.attr.node;
+					});
+				end
+			end
+			
+			if not self.disco.cache[jid] then
+				self.disco.cache[jid] = { nodes = {} };
+			end
+			
+			if node then
+				if not self.disco.cache[jid].nodes[node] then
+					self.disco.cache[jid].nodes[node] = { nodes = {} };
+				end
+				self.disco.cache[jid].nodes[node].items = disco_items;
+			else
+				self.disco.cache[jid].items = disco_items;
+			end
+			return callback(disco_items);
+		end);
+	end
+	
+	stream:hook("iq/"..xmlns_disco_info, function (stanza)
+		local query = stanza.tags[1];
+		if stanza.attr.type == 'get' and query.name == "query" then
+			local query_node = query.attr.node;
+			local node = stream.disco.info[query_node or false];
+			if query_node and query_node == stream.caps.node .. "#" .. stream.caps.hash then
+				node = stream.disco.info[false];
+			end
+			local identities, features = node.identities, node.features
+
+			-- construct the response
+			local result = verse.reply(stanza):tag("query", {
+				xmlns = xmlns_disco_info,
+				node = query_node,
+			});
+			for _,identity in pairs(identities) do
+				result:tag('identity', identity):up()
+			end
+			for feature in pairs(features) do
+				result:tag('feature', { var = feature }):up()
+			end
+			stream:send(result);
+			return true
+		end
+	end);
+
+	stream:hook("iq/"..xmlns_disco_items, function (stanza)
+		local query = stanza.tags[1];
+		if stanza.attr.type == 'get' and query.name == "query" then
+			-- figure out what items to send
+			local items = stream.disco.items[query.attr.node or false];
+
+			-- construct the response
+			local result = verse.reply(stanza):tag('query',{
+				xmlns = xmlns_disco_items,
+				node = query.attr.node
+			})
+			for i=1,#items do
+				result:tag('item', items[i]):up()
+			end
+			stream:send(result);
+			return true
+		end
+	end);
+	
+	local initial_disco_started;
+	stream:hook("ready", function ()
+		if initial_disco_started then return; end
+		initial_disco_started = true;
+		stream:disco_local_services(function (services)
+			for _, service in ipairs(services) do
+				local service_disco_info = stream.disco.cache[service.jid];
+				if service_disco_info then
+					for identity in pairs(service_disco_info.identities) do
+						local category, type = identity:match("^(.*)/(.*)$");
+						stream:event("disco/service-discovered/"..category, {
+							type = type, jid = service.jid;
+						});
+					end
+				end
+			end
+			stream:event("ready");
+		end);
+		return true;
+	end, 50);
+	
+	stream:hook("presence-out", function (presence)
+		if not presence:get_child("c", xmlns_caps) then
+			presence:reset():add_child(stream:caps()):reset();
+		end
+	end, 10);
 end
-end)
-package.preload['verse.plugins.bind']=(function(...)
-local t=require"verse";
-local i=require"util.jid";
-local a="urn:ietf:params:xml:ns:xmpp-bind";
-function t.plugins.bind(e)
-local function o(o)
-if e.bound then return;end
-e:debug("Binding resource...");
-e:send_iq(t.iq({type="set"}):tag("bind",{xmlns=a}):tag("resource"):text(e.resource),
-function(t)
-if t.attr.type=="result"then
-local t=t
-:get_child("bind",a)
-:get_child_text("jid");
-e.username,e.host,e.resource=i.split(t);
-e.jid,e.bound=t,true;
-e:event("bind-success",{jid=t});
-elseif t.attr.type=="error"then
-local a=t:child_with_name("error");
-local a,t,o=t:get_error();
-e:event("bind-failure",{error=t,text=o,type=a});
+
+-- end of disco.lua
+ end)
+package.preload['verse.plugins.version'] = (function (...)
+local verse = require "verse";
+
+local xmlns_version = "jabber:iq:version";
+
+local function set_version(self, version_info)
+	self.name = version_info.name;
+	self.version = version_info.version;
+	self.platform = version_info.platform;
 end
+
+function verse.plugins.version(stream)
+	stream.version = { set = set_version };
+	stream:hook("iq/"..xmlns_version, function (stanza)
+		if stanza.attr.type ~= "get" then return; end
+		local reply = verse.reply(stanza)
+			:tag("query", { xmlns = xmlns_version });
+		if stream.version.name then
+			reply:tag("name"):text(tostring(stream.version.name)):up();
+		end
+		if stream.version.version then
+			reply:tag("version"):text(tostring(stream.version.version)):up()
+		end
+		if stream.version.platform then
+			reply:tag("os"):text(stream.version.platform);
+		end
+		stream:send(reply);
+		return true;
+	end);
+	
+	function stream:query_version(target_jid, callback)
+		callback = callback or function (version) return stream:event("version/response", version); end
+		stream:send_iq(verse.iq({ type = "get", to = target_jid })
+			:tag("query", { xmlns = xmlns_version }), 
+			function (reply)
+				if reply.attr.type == "result" then
+					local query = reply:get_child("query", xmlns_version);
+					local name = query and query:get_child_text("name");
+					local version = query and query:get_child_text("version");
+					local os = query and query:get_child_text("os");
+					callback({
+						name = name;
+						version = version;
+						platform = os;
+						});
+				else
+					local type, condition, text = reply:get_error();
+					callback({
+						error = true;
+						condition = condition;
+						text = text;
+						type = type;
+						});
+				end
+			end);
+	end
+	return true;
+end
+ end)
+package.preload['verse.plugins.ping'] = (function (...)
+local verse = require "verse";
+
+local xmlns_ping = "urn:xmpp:ping";
+
+function verse.plugins.ping(stream)
+	function stream:ping(jid, callback)
+		local t = socket.gettime();
+		stream:send_iq(verse.iq{ to = jid, type = "get" }:tag("ping", { xmlns = xmlns_ping }), 
+			function (reply)
+				if reply.attr.type == "error" then
+					local type, condition, text = reply:get_error();
+					if condition ~= "service-unavailable" and condition ~= "feature-not-implemented" then
+						callback(nil, jid, { type = type, condition = condition, text = text });
+						return;
+					end
+				end
+				callback(socket.gettime()-t, jid);
+			end);
+	end
+	stream:hook("iq/"..xmlns_ping, function(stanza)
+		return stream:send(verse.reply(stanza));
+	end);
+	return true;
+end
+ end)
+package.preload['verse.plugins.uptime'] = (function (...)
+local verse = require "verse";
+
+local xmlns_last = "jabber:iq:last";
+
+local function set_uptime(self, uptime_info)
+	self.starttime = uptime_info.starttime;
+end
+
+function verse.plugins.uptime(stream)
+	stream.uptime = { set = set_uptime };
+	stream:hook("iq/"..xmlns_last, function (stanza)
+		if stanza.attr.type ~= "get" then return; end
+		local reply = verse.reply(stanza)
+			:tag("query", { seconds = tostring(os.difftime(os.time(), stream.uptime.starttime)), xmlns = xmlns_last });
+		stream:send(reply);
+		return true;
+	end);
+
+	function stream:query_uptime(target_jid, callback)
+		callback = callback or function (uptime) return stream:event("uptime/response", uptime); end
+		stream:send_iq(verse.iq({ type = "get", to = target_jid })
+			:tag("query", { xmlns = xmlns_last }),
+			function (reply)
+				local query = reply:get_child("query", xmlns_last);
+				if reply.attr.type == "result" then
+					local seconds = tonumber(query.attr.seconds);
+					callback({
+						seconds = seconds or nil;
+						});
+				else
+					local type, condition, text = reply:get_error();
+					callback({
+						error = true;
+						condition = condition;
+						text = text;
+						type = type;
+						});
+				end
+			end);
+	end
+	return true;
+end
+ end)
+package.preload['verse.plugins.blocking'] = (function (...)
+local verse = require "verse";
+
+local xmlns_blocking = "urn:xmpp:blocking";
+
+function verse.plugins.blocking(stream)
+	-- FIXME: Disco
+	stream.blocking = {};
+	function stream.blocking:block_jid(jid, callback)
+		stream:send_iq(verse.iq{type="set"}
+			:tag("block", { xmlns = xmlns_blocking })
+				:tag("item", { jid = jid })
+			, function () return callback and callback(true); end
+			, function () return callback and callback(false); end
+		);
+	end
+	function stream.blocking:unblock_jid(jid, callback)
+		stream:send_iq(verse.iq{type="set"}
+			:tag("unblock", { xmlns = xmlns_blocking })
+				:tag("item", { jid = jid })
+			, function () return callback and callback(true); end
+			, function () return callback and callback(false); end
+		);
+	end
+	function stream.blocking:unblock_all_jids(callback)
+		stream:send_iq(verse.iq{type="set"}
+			:tag("unblock", { xmlns = xmlns_blocking })
+			, function () return callback and callback(true); end
+			, function () return callback and callback(false); end
+		);
+	end
+	function stream.blocking:get_blocked_jids(callback)
+		stream:send_iq(verse.iq{type="get"}
+			:tag("blocklist", { xmlns = xmlns_blocking })
+			, function (result)
+				local list = result:get_child("blocklist", xmlns_blocking);
+				if not list then return callback and callback(false); end
+				local jids = {};
+				for item in list:childtags() do
+					jids[#jids+1] = item.attr.jid;
+				end
+				return callback and callback(jids);
+			  end
+			, function (result) return callback and callback(false); end
+		);
+	end
+end
+ end)
+package.preload['verse.plugins.jingle'] = (function (...)
+local verse = require "verse";
+local sha1 = require "util.sha1".sha1;
+local timer = require "util.timer";
+local uuid_generate = require "util.uuid".generate;
+
+local xmlns_jingle = "urn:xmpp:jingle:1";
+local xmlns_jingle_errors = "urn:xmpp:jingle:errors:1";
+
+local jingle_mt = {};
+jingle_mt.__index = jingle_mt;
+
+local registered_transports = {};
+local registered_content_types = {};
+
+function verse.plugins.jingle(stream)
+	stream:hook("ready", function ()
+		stream:add_disco_feature(xmlns_jingle);
+	end, 10);
+	
+	function stream:jingle(to)
+		return verse.eventable(setmetatable(base or {
+			role = "initiator";
+			peer = to;
+			sid = uuid_generate();
+			stream = stream;
+		}, jingle_mt));
+	end
+	
+	function stream:register_jingle_transport(transport)
+		-- transport is a function that receives a
+		-- <transport> element, and returns a connection
+		-- We wait for 'connected' on that connection,
+		-- and use :send() and 'incoming-raw'.
+	end
+	
+	function stream:register_jingle_content_type(content)
+		-- Call content() for every 'incoming-raw'?
+		-- I think content() returns the object we return
+		-- on jingle:accept()
+	end
+	
+	local function handle_incoming_jingle(stanza)
+		local jingle_tag = stanza:get_child("jingle", xmlns_jingle);
+		local sid = jingle_tag.attr.sid;
+		local action = jingle_tag.attr.action;
+		local result = stream:event("jingle/"..sid, stanza);
+		if result == true then
+			-- Ack
+			stream:send(verse.reply(stanza));
+			return true;
+		end
+		-- No existing Jingle object handled this action, our turn...
+		if action ~= "session-initiate" then
+			-- Trying to send a command to a session we don't know
+			local reply = verse.error_reply(stanza, "cancel", "item-not-found")
+				:tag("unknown-session", { xmlns = xmlns_jingle_errors }):up();
+			stream:send(reply);
+			return;
+		end
+		
+		-- Ok, session-initiate, new session
+		
+		-- Create new Jingle object
+		local sid = jingle_tag.attr.sid;
+		
+		local jingle = verse.eventable{
+			role = "receiver";
+			peer = stanza.attr.from;
+			sid = sid;
+			stream = stream;
+		};
+		
+		setmetatable(jingle, jingle_mt);
+		
+		local content_tag;
+		local content, transport;
+		for tag in jingle_tag:childtags() do
+			if tag.name == "content" and tag.attr.xmlns == xmlns_jingle then
+			 	local description_tag = tag:child_with_name("description");
+			 	local description_xmlns = description_tag.attr.xmlns;
+			 	if description_xmlns then
+			 		local desc_handler = stream:event("jingle/content/"..description_xmlns, jingle, description_tag);
+			 		if desc_handler then
+			 			content = desc_handler;
+			 		end
+			 	end
+				
+				local transport_tag = tag:child_with_name("transport");
+				local transport_xmlns = transport_tag.attr.xmlns;
+				
+				transport = stream:event("jingle/transport/"..transport_xmlns, jingle, transport_tag);
+				if content and transport then
+					content_tag = tag;
+					break;
+				end
+			end
+		end
+		if not content then
+			-- FIXME: Fail, no content
+			stream:send(verse.error_reply(stanza, "cancel", "feature-not-implemented", "The specified content is not supported"));
+			return true;
+		end
+		
+		if not transport then
+			-- FIXME: Refuse session, no transport
+			stream:send(verse.error_reply(stanza, "cancel", "feature-not-implemented", "The specified transport is not supported"));
+			return true;
+		end
+		
+		stream:send(verse.reply(stanza));
+		
+		jingle.content_tag = content_tag;
+		jingle.creator, jingle.name = content_tag.attr.creator, content_tag.attr.name;
+		jingle.content, jingle.transport = content, transport;
+		
+		function jingle:decline()
+			-- FIXME: Decline session
+		end
+		
+		stream:hook("jingle/"..sid, function (stanza)
+			if stanza.attr.from ~= jingle.peer then
+				return false;
+			end
+			local jingle_tag = stanza:get_child("jingle", xmlns_jingle);
+			return jingle:handle_command(jingle_tag);
+		end);
+		
+		stream:event("jingle", jingle);
+		return true;
+	end
+	
+	function jingle_mt:handle_command(jingle_tag)
+		local action = jingle_tag.attr.action;
+		stream:debug("Handling Jingle command: %s", action);
+		if action == "session-terminate" then
+			self:destroy();
+		elseif action == "session-accept" then
+			-- Yay!
+			self:handle_accepted(jingle_tag);
+		elseif action == "transport-info" then
+			stream:debug("Handling transport-info");
+			self.transport:info_received(jingle_tag);
+		elseif action == "transport-replace" then
+			-- FIXME: Used for IBB fallback
+			stream:error("Peer wanted to swap transport, not implemented");
+		else
+			-- FIXME: Reply unhandled command
+			stream:warn("Unhandled Jingle command: %s", action);
+			return nil;
+		end
+		return true;
+	end
+
+	function jingle_mt:send_command(command, element, callback)
+		local stanza = verse.iq({ to = self.peer, type = "set" })
+			:tag("jingle", {
+				xmlns = xmlns_jingle,
+				sid = self.sid,
+				action = command,
+				initiator = self.role == "initiator" and self.stream.jid or nil,
+				responder = self.role == "responder" and self.jid or nil,
+			}):add_child(element);
+		if not callback then
+			self.stream:send(stanza);
+		else
+			self.stream:send_iq(stanza, callback);
+		end
+	end
+		
+	function jingle_mt:accept(options)
+		local accept_stanza = verse.iq({ to = self.peer, type = "set" })
+			:tag("jingle", {
+				xmlns = xmlns_jingle,
+				sid = self.sid,
+				action = "session-accept",
+				responder = stream.jid,
+			})
+				:tag("content", { creator = self.creator, name = self.name });
+		
+		local content_accept_tag = self.content:generate_accept(self.content_tag:child_with_name("description"), options);
+		accept_stanza:add_child(content_accept_tag);
+		
+		local transport_accept_tag = self.transport:generate_accept(self.content_tag:child_with_name("transport"), options);
+		accept_stanza:add_child(transport_accept_tag);
+		
+		local jingle = self;
+		stream:send_iq(accept_stanza, function (result)
+			if result.attr.type == "error" then
+				local type, condition, text = result:get_error();
+				stream:error("session-accept rejected: %s", condition); -- FIXME: Notify
+				return false;
+			end
+			jingle.transport:connect(function (conn)
+				stream:warn("CONNECTED (receiver)!!!");
+				jingle.state = "active";
+				jingle:event("connected", conn);
+			end);
+		end);
+	end
+	
+
+	stream:hook("iq/"..xmlns_jingle, handle_incoming_jingle);
+	return true;
+end
+
+function jingle_mt:offer(name, content)
+	local session_initiate = verse.iq({ to = self.peer, type = "set" })
+		:tag("jingle", { xmlns = xmlns_jingle, action = "session-initiate",
+			initiator = self.stream.jid, sid = self.sid });
+	
+	-- Content tag
+	session_initiate:tag("content", { creator = self.role, name = name });
+	
+	-- Need description element from someone who can turn 'content' into XML
+	local description = self.stream:event("jingle/describe/"..name, content);
+	
+	if not description then
+		return false, "Unknown content type";
+	end
+	
+	session_initiate:add_child(description);
+	
+	-- FIXME: Sort transports by 1) recipient caps 2) priority (SOCKS vs IBB, etc.)
+	-- Fixed to s5b in the meantime
+	local transport = self.stream:event("jingle/transport/".."urn:xmpp:jingle:transports:s5b:1", self);
+	self.transport = transport;
+	
+	session_initiate:add_child(transport:generate_initiate());
+	
+	self.stream:debug("Hooking %s", "jingle/"..self.sid);
+	self.stream:hook("jingle/"..self.sid, function (stanza)
+		if stanza.attr.from ~= self.peer then
+			return false;
+		end
+		local jingle_tag = stanza:get_child("jingle", xmlns_jingle);
+		return self:handle_command(jingle_tag)
+	end);
+	
+	self.stream:send_iq(session_initiate, function (result)
+		if result.attr.type == "error" then
+			self.state = "terminated";
+			local type, condition, text = result:get_error();
+			return self:event("error", { type = type, condition = condition, text = text });
+		end
+	end);
+	self.state = "pending";
+end
+
+function jingle_mt:terminate(reason)
+	local reason_tag = verse.stanza("reason"):tag(reason or "success");
+	self:send_command("session-terminate", reason_tag, function (result)
+		self.state = "terminated";
+		self.transport:disconnect();
+		self:destroy();
+	end);
+end
+
+function jingle_mt:destroy()
+	self:event("terminated");
+	self.stream:unhook("jingle/"..self.sid, self.handle_command);
+end
+
+function jingle_mt:handle_accepted(jingle_tag)
+	local transport_tag = jingle_tag:child_with_name("transport");
+	self.transport:handle_accepted(transport_tag);
+	self.transport:connect(function (conn)
+		self.stream:debug("CONNECTED (initiator)!")
+		-- Connected, send file
+		self.state = "active";
+		self:event("connected", conn);
+	end);
+end
+
+function jingle_mt:set_source(source, auto_close)
+	local function pump()
+		local chunk, err = source();
+		if chunk and chunk ~= "" then
+			self.transport.conn:send(chunk);
+		elseif chunk == "" then
+			return pump(); -- We need some data!
+		elseif chunk == nil then
+			if auto_close then
+				self:terminate();
+			end
+			self.transport.conn:unhook("drained", pump);
+			source = nil;
+		end
+	end
+	self.transport.conn:hook("drained", pump);
+	pump();
+end
+
+function jingle_mt:set_sink(sink)
+	self.transport.conn:hook("incoming-raw", sink);
+	self.transport.conn:hook("disconnected", function (event)
+		self.stream:debug("Closing sink...");
+		local reason = event.reason;
+		if reason == "closed" then reason = nil; end
+		sink(nil, reason);
+	end);
+end
+ end)
+package.preload['verse.plugins.jingle_ft'] = (function (...)
+local verse = require "verse";
+local ltn12 = require "ltn12";
+
+local dirsep = package.config:sub(1,1);
+
+local xmlns_jingle_ft = "urn:xmpp:jingle:apps:file-transfer:1";
+local xmlns_si_file_transfer = "http://jabber.org/protocol/si/profile/file-transfer";
+
+function verse.plugins.jingle_ft(stream)
+	stream:hook("ready", function ()
+		stream:add_disco_feature(xmlns_jingle_ft);
+	end, 10);
+	
+	local ft_content = { type = "file" };
+	
+	function ft_content:generate_accept(description, options)
+		if options and options.save_file then
+			self.jingle:hook("connected", function ()
+				local sink = ltn12.sink.file(io.open(options.save_file, "w+"));
+				self.jingle:set_sink(sink);
+			end);
+		end
+		
+		return description;
+	end
+	
+	local ft_mt = { __index = ft_content };
+	stream:hook("jingle/content/"..xmlns_jingle_ft, function (jingle, description_tag)
+		local file_tag = description_tag:get_child("offer"):get_child("file", xmlns_si_file_transfer);
+		local file = {
+			name = file_tag.attr.name;
+			size = tonumber(file_tag.attr.size);
+		};
+		
+		return setmetatable({ jingle = jingle, file = file }, ft_mt);
+	end);
+	
+	stream:hook("jingle/describe/file", function (file_info)
+		-- Return <description/>
+		local date;
+		if file_info.timestamp then
+			date = os.date("!%Y-%m-%dT%H:%M:%SZ", file_info.timestamp);
+		end
+		return verse.stanza("description", { xmlns = xmlns_jingle_ft })
+			:tag("offer")
+				:tag("file", { xmlns = xmlns_si_file_transfer,
+					name = file_info.filename, -- Mandatory
+					size = file_info.size, -- Mandatory
+					date = date,
+					hash = file_info.hash,
+				})
+					:tag("desc"):text(file_info.description or "");
+	end);
+
+	function stream:send_file(to, filename)
+		local file, err = io.open(filename);
+		if not file then return file, err; end
+		
+		local file_size = file:seek("end", 0);
+		file:seek("set", 0);
+		
+		local source = ltn12.source.file(file);
+		
+		local jingle = self:jingle(to);
+		jingle:offer("file", {
+			filename = filename:match("[^"..dirsep.."]+$");
+			size = file_size;
+		});
+		jingle:hook("connected", function ()
+			jingle:set_source(source, true);
+		end);
+		return jingle;
+	end
+end
+ end)
+package.preload['verse.plugins.jingle_s5b'] = (function (...)
+local verse = require "verse";
+
+local xmlns_s5b = "urn:xmpp:jingle:transports:s5b:1";
+local xmlns_bytestreams = "http://jabber.org/protocol/bytestreams";
+local sha1 = require "util.sha1".sha1;
+local uuid_generate = require "util.uuid".generate;
+
+local function negotiate_socks5(conn, hash)
+	local function suppress_connected()
+		conn:unhook("connected", suppress_connected);
+		return true;
+	end
+	local function receive_connection_response(data)
+		conn:unhook("incoming-raw", receive_connection_response);
+		
+		if data:sub(1, 2) ~= "\005\000" then
+			return conn:event("error", "connection-failure");
+		end
+		conn:event("connected");
+		return true;
+	end
+	local function receive_auth_response(data)
+		conn:unhook("incoming-raw", receive_auth_response);
+		if data ~= "\005\000" then -- SOCKSv5; "NO AUTHENTICATION"
+			-- Server is not SOCKSv5, or does not allow no auth
+			local err = "version-mismatch";
+			if data:sub(1,1) == "\005" then
+				err = "authentication-failure";
+			end
+			return conn:event("error", err);
+		end
+		-- Request SOCKS5 connection
+		conn:send(string.char(0x05, 0x01, 0x00, 0x03, #hash)..hash.."\0\0"); --FIXME: Move to "connected"?
+		conn:hook("incoming-raw", receive_connection_response, 100);
+		return true;
+	end
+	conn:hook("connected", suppress_connected, 200);
+	conn:hook("incoming-raw", receive_auth_response, 100);
+	conn:send("\005\001\000"); -- SOCKSv5; 1 mechanism; "NO AUTHENTICATION"
+end
+
+local function connect_to_usable_streamhost(callback, streamhosts, auth_token)
+	local conn = verse.new(nil, {
+		streamhosts = streamhosts,
+		current_host = 0;
+	});
+	--Attempt to connect to the next host
+	local function attempt_next_streamhost(event)
+		if event then
+			return callback(nil, event.reason); 
+		end
+		-- First connect, or the last connect failed
+		if conn.current_host < #conn.streamhosts then
+			conn.current_host = conn.current_host + 1;
+			conn:debug("Attempting to connect to "..conn.streamhosts[conn.current_host].host..":"..conn.streamhosts[conn.current_host].port.."...");
+			local ok, err = conn:connect(
+				conn.streamhosts[conn.current_host].host,
+				conn.streamhosts[conn.current_host].port
+			);
+			if not ok then
+				conn:debug("Error connecting to proxy (%s:%s): %s", 
+					conn.streamhosts[conn.current_host].host,
+					conn.streamhosts[conn.current_host].port,
+					err
+				);
+			else
+				conn:debug("Connecting...");
+			end
+			negotiate_socks5(conn, auth_token);
+			return true; -- Halt processing of disconnected event
+		end
+		-- All streamhosts tried, none successful
+		conn:unhook("disconnected", attempt_next_streamhost);
+		return callback(nil);
+		-- Let disconnected event fall through to user handlers...
+	end
+	conn:hook("disconnected", attempt_next_streamhost, 100);
+	-- When this event fires, we're connected to a streamhost
+	conn:hook("connected", function ()
+		conn:unhook("disconnected", attempt_next_streamhost);
+		callback(conn.streamhosts[conn.current_host], conn);
+	end, 100);
+	attempt_next_streamhost(); -- Set it in motion
+	return conn;
+end
+
+function verse.plugins.jingle_s5b(stream)
+	stream:hook("ready", function ()
+		stream:add_disco_feature(xmlns_s5b);
+	end, 10);
+
+	local s5b = {};
+	
+	function s5b:generate_initiate()
+		self.s5b_sid = uuid_generate();
+		local transport = verse.stanza("transport", { xmlns = xmlns_s5b,
+			mode = "tcp", sid = self.s5b_sid });
+		local p = 0;
+		for jid, streamhost in pairs(stream.proxy65.available_streamhosts) do
+			p = p + 1;
+			transport:tag("candidate", { jid = jid, host = streamhost.host,
+				port = streamhost.port, cid=jid, priority = p, type = "proxy" }):up();
+		end
+		stream:debug("Have %d proxies", p)
+		return transport;
+	end
+	
+	function s5b:generate_accept(initiate_transport)
+		local candidates = {};
+		self.s5b_peer_candidates = candidates;
+		self.s5b_mode = initiate_transport.attr.mode or "tcp";
+		self.s5b_sid = initiate_transport.attr.sid or self.jingle.sid;
+		
+		-- Import the list of candidates the initiator offered us
+		for candidate in initiate_transport:childtags() do
+			--if candidate.attr.jid == "asterix4@jabber.lagaule.org/Gajim"
+			--and candidate.attr.host == "82.246.25.239" then
+				candidates[candidate.attr.cid] = {
+					type = candidate.attr.type;
+					jid = candidate.attr.jid;
+					host = candidate.attr.host;
+					port = tonumber(candidate.attr.port) or 0;
+					priority = tonumber(candidate.attr.priority) or 0;
+					cid = candidate.attr.cid;
+				};
+			--end
+		end
+		
+		-- Import our own candidates
+		-- TODO ^
+		local transport = verse.stanza("transport", { xmlns = xmlns_s5b });
+		return transport;
+	end
+	
+	function s5b:connect(callback)
+		stream:warn("Connecting!");
+		
+		local streamhost_array = {};
+		for cid, streamhost in pairs(self.s5b_peer_candidates or {}) do
+			streamhost_array[#streamhost_array+1] = streamhost;
+		end
+		
+		if #streamhost_array > 0 then
+			self.connecting_peer_candidates = true;
+			local function onconnect(streamhost, conn)
+				self.jingle:send_command("transport-info", verse.stanza("content", { creator = self.creator, name = self.name })
+					:tag("transport", { xmlns = xmlns_s5b, sid = self.s5b_sid })
+						:tag("candidate-used", { cid = streamhost.cid }));
+				self.onconnect_callback = callback;
+				self.conn = conn;
+			end
+			local auth_token = sha1(self.s5b_sid..self.peer..stream.jid, true);
+			connect_to_usable_streamhost(onconnect, streamhost_array, auth_token);
+		else
+			stream:warn("Actually, I'm going to wait for my peer to tell me its streamhost...");
+			self.onconnect_callback = callback;
+		end
+	end
+	
+	function s5b:info_received(jingle_tag)
+		stream:warn("Info received");
+		local content_tag = jingle_tag:child_with_name("content");
+		local transport_tag = content_tag:child_with_name("transport");
+		if transport_tag:get_child("candidate-used") and not self.connecting_peer_candidates then
+			local candidate_used = transport_tag:child_with_name("candidate-used");
+			if candidate_used then
+				-- Connect straight away to candidate used, we weren't trying any anyway
+				local function onconnect(streamhost, conn)
+					if self.jingle.role == "initiator" then -- More correct would be - "is this a candidate we offered?"
+						-- Activate the stream
+						self.jingle.stream:send_iq(verse.iq({ to = streamhost.jid, type = "set" })
+							:tag("query", { xmlns = xmlns_bytestreams, sid = self.s5b_sid })
+								:tag("activate"):text(self.jingle.peer), function (result)
+							
+							if result.attr.type == "result" then
+								self.jingle:send_command("transport-info", verse.stanza("content", content_tag.attr)
+									:tag("transport", { xmlns = xmlns_s5b, sid = self.s5b_sid })
+										:tag("activated", { cid = candidate_used.attr.cid }));
+								self.conn = conn;
+								self.onconnect_callback(conn);
+							else
+								self.jingle.stream:error("Failed to activate bytestream");
+							end
+						end);
+					end
+				end
+				
+				-- FIXME: Another assumption that cid==jid, and that it was our candidate
+				self.jingle.stream:debug("CID: %s", self.jingle.stream.proxy65.available_streamhosts[candidate_used.attr.cid]);
+				local streamhost_array = {
+					self.jingle.stream.proxy65.available_streamhosts[candidate_used.attr.cid];
+				};
+
+				local auth_token = sha1(self.s5b_sid..stream.jid..self.peer, true);
+				connect_to_usable_streamhost(onconnect, streamhost_array, auth_token);
+			end
+		elseif transport_tag:get_child("activated") then
+			self.onconnect_callback(self.conn);
+		end
+	end
+	
+	function s5b:disconnect()
+		if self.conn then
+			self.conn:close();
+		end
+	end
+	
+	function s5b:handle_accepted(jingle_tag)
+	end
+
+	local s5b_mt = { __index = s5b };
+	stream:hook("jingle/transport/"..xmlns_s5b, function (jingle)
+		return setmetatable({
+			role = jingle.role,
+			peer = jingle.peer,
+			stream = jingle.stream,
+			jingle = jingle,
+		}, s5b_mt);
+	end);
+end
+ end)
+package.preload['verse.plugins.proxy65'] = (function (...)
+local events = require "util.events";
+local uuid = require "util.uuid";
+local sha1 = require "util.sha1";
+
+local proxy65_mt = {};
+proxy65_mt.__index = proxy65_mt;
+
+local xmlns_bytestreams = "http://jabber.org/protocol/bytestreams";
+
+local negotiate_socks5;
+
+function verse.plugins.proxy65(stream)
+	stream.proxy65 = setmetatable({ stream = stream }, proxy65_mt);
+	stream.proxy65.available_streamhosts = {};
+	local outstanding_proxies = 0;
+	stream:hook("disco/service-discovered/proxy", function (service)
+		-- Fill list with available proxies
+		if service.type == "bytestreams" then
+			outstanding_proxies = outstanding_proxies + 1;
+			stream:send_iq(verse.iq({ to = service.jid, type = "get" })
+				:tag("query", { xmlns = xmlns_bytestreams }), function (result)
+				
+				outstanding_proxies = outstanding_proxies - 1;
+				if result.attr.type == "result" then
+					local streamhost = result:get_child("query", xmlns_bytestreams)
+						:get_child("streamhost").attr;
+					
+					stream.proxy65.available_streamhosts[streamhost.jid] = {
+						jid = streamhost.jid;
+						host = streamhost.host;
+						port = tonumber(streamhost.port);
+					};
+				end
+				if outstanding_proxies == 0 then
+					stream:event("proxy65/discovered-proxies", stream.proxy65.available_streamhosts);
+				end
+			end);
+		end
+	end);
+	stream:hook("iq/"..xmlns_bytestreams, function (request)
+		local conn = verse.new(nil, {
+			initiator_jid = request.attr.from,
+			streamhosts = {},
+			current_host = 0;
+		});
+		
+		-- Parse hosts from request
+		for tag in request.tags[1]:childtags() do
+			if tag.name == "streamhost" then
+				table.insert(conn.streamhosts, tag.attr);	
+			end
+		end
+		
+		--Attempt to connect to the next host
+		local function attempt_next_streamhost()
+			-- First connect, or the last connect failed
+			if conn.current_host < #conn.streamhosts then
+				conn.current_host = conn.current_host + 1;
+				conn:connect(
+					conn.streamhosts[conn.current_host].host,
+					conn.streamhosts[conn.current_host].port
+				);
+				negotiate_socks5(stream, conn, request.tags[1].attr.sid, request.attr.from, stream.jid);
+				return true; -- Halt processing of disconnected event
+			end
+			-- All streamhosts tried, none successful
+			conn:unhook("disconnected", attempt_next_streamhost);
+			stream:send(verse.error_reply(request, "cancel", "item-not-found"));
+			-- Let disconnected event fall through to user handlers...
+		end
+		
+		function conn:accept()
+			conn:hook("disconnected", attempt_next_streamhost, 100);
+			-- When this event fires, we're connected to a streamhost
+			conn:hook("connected", function ()
+				conn:unhook("disconnected", attempt_next_streamhost);
+				-- Send XMPP success notification
+				local reply = verse.reply(request)
+					:tag("query", request.tags[1].attr)
+					:tag("streamhost-used", { jid = conn.streamhosts[conn.current_host].jid });
+				stream:send(reply);
+			end, 100);
+			attempt_next_streamhost();
+		end
+		function conn:refuse()
+			-- FIXME: XMPP refused reply
+		end
+		stream:event("proxy65/request", conn);
+	end);
+end
+
+function proxy65_mt:new(target_jid, proxies)
+	local conn = verse.new(nil, {
+		target_jid = target_jid;
+		bytestream_sid = uuid.generate();
+	});
+	
+	local request = verse.iq{type="set", to = target_jid}
+		:tag("query", { xmlns = xmlns_bytestreams, mode = "tcp", sid = conn.bytestream_sid });
+	for _, proxy in ipairs(proxies or self.proxies) do
+		request:tag("streamhost", proxy):up();
+	end
+	
+	
+	self.stream:send_iq(request, function (reply)
+		if reply.attr.type == "error" then
+			local type, condition, text = reply:get_error();
+			conn:event("connection-failed", { conn = conn, type = type, condition = condition, text = text });
+		else
+			-- Target connected to streamhost, connect ourselves
+			local streamhost_used = reply.tags[1]:get_child("streamhost-used");
+			if not streamhost_used then
+				--FIXME: Emit error
+			end
+			conn.streamhost_jid = streamhost_used.attr.jid;
+			local host, port;
+			for _, proxy in ipairs(proxies or self.proxies) do
+				if proxy.jid == conn.streamhost_jid then
+					host, port = proxy.host, proxy.port;
+					break;
+				end
+			end
+			if not (host and port) then
+				--FIXME: Emit error
+			end
+			
+			conn:connect(host, port);
+
+			local function handle_proxy_connected()
+				conn:unhook("connected", handle_proxy_connected);
+				-- Both of us connected, tell proxy to activate connection
+				local request = verse.iq{to = conn.streamhost_jid, type="set"}
+					:tag("query", { xmlns = xmlns_bytestreams, sid = conn.bytestream_sid })
+						:tag("activate"):text(target_jid);
+				self.stream:send_iq(request, function (reply)
+					if reply.attr.type == "result" then
+						-- Connection activated, ready to use
+						conn:event("connected", conn);
+					else
+						--FIXME: Emit error
+					end
+				end);
+				return true;
+			end
+			conn:hook("connected", handle_proxy_connected, 100);
+
+			negotiate_socks5(self.stream, conn, conn.bytestream_sid, self.stream.jid, target_jid);
+		end
+	end);
+	return conn;
+end
+
+function negotiate_socks5(stream, conn, sid, requester_jid, target_jid)
+	local hash = sha1.sha1(sid..requester_jid..target_jid);
+	local function suppress_connected()
+		conn:unhook("connected", suppress_connected);
+		return true;
+	end
+	local function receive_connection_response(data)
+		conn:unhook("incoming-raw", receive_connection_response);
+		
+		if data:sub(1, 2) ~= "\005\000" then
+			return conn:event("error", "connection-failure");
+		end
+		conn:event("connected");
+		return true;
+	end
+	local function receive_auth_response(data)
+		conn:unhook("incoming-raw", receive_auth_response);
+		if data ~= "\005\000" then -- SOCKSv5; "NO AUTHENTICATION"
+			-- Server is not SOCKSv5, or does not allow no auth
+			local err = "version-mismatch";
+			if data:sub(1,1) == "\005" then
+				err = "authentication-failure";
+			end
+			return conn:event("error", err);
+		end
+		-- Request SOCKS5 connection
+		conn:send(string.char(0x05, 0x01, 0x00, 0x03, #hash)..hash.."\0\0"); --FIXME: Move to "connected"?
+		conn:hook("incoming-raw", receive_connection_response, 100);
+		return true;
+	end
+	conn:hook("connected", suppress_connected, 200);
+	conn:hook("incoming-raw", receive_auth_response, 100);
+	conn:send("\005\001\000"); -- SOCKSv5; 1 mechanism; "NO AUTHENTICATION"
+end
+ end)
+package.preload['verse.plugins.jingle_ibb'] = (function (...)
+local verse = require "verse";
+local base64 = require "util.encodings".base64;
+local uuid_generate = require "util.uuid".generate;
+
+local xmlns_jingle_ibb = "urn:xmpp:jingle:transports:ibb:1";
+local xmlns_ibb = "http://jabber.org/protocol/ibb";
+assert(base64.encode("This is a test.") == "VGhpcyBpcyBhIHRlc3Qu", "Base64 encoding failed");
+assert(base64.decode("VGhpcyBpcyBhIHRlc3Qu") == "This is a test.", "Base64 decoding failed");
+local t_concat = table.concat
+
+local ibb_conn = {};
+local ibb_conn_mt = { __index = ibb_conn };
+
+local function new_ibb(stream)
+	local conn = setmetatable({ stream = stream }, ibb_conn_mt)
+	conn = verse.eventable(conn);
+	return conn;
+end
+
+function ibb_conn:initiate(peer, sid, stanza)
+	self.block = 2048; -- ignored for now
+	self.stanza = stanza or 'iq';
+	self.peer = peer;
+	self.sid = sid or tostring(self):match("%x+$");
+	self.iseq = 0;
+	self.oseq = 0;
+	local feeder = function(stanza)
+		return self:feed(stanza)
+	end
+	self.feeder = feeder;
+	print("Hooking incomming IQs");
+	local stream = self.stream;
+		stream:hook("iq/".. xmlns_ibb, feeder)
+	if stanza == "message" then
+		stream:hook("message", feeder)
+	end
+end
+
+function ibb_conn:open(callback)
+	self.stream:send_iq(verse.iq{ to = self.peer, type = "set" }
+		:tag("open", {
+			xmlns = xmlns_ibb,
+			["block-size"] = self.block,
+			sid = self.sid,
+			stanza = self.stanza
+		})
+	, function(reply)
+		if callback then
+			if reply.attr.type ~= "error" then
+				callback(true)
+			else
+				callback(false, reply:get_error())
+			end
+		end
+	end);
+end
+
+function ibb_conn:send(data)
+	local stanza = self.stanza;
+	local st;
+	if stanza == "iq" then
+		st = verse.iq{ type = "set", to = self.peer }
+	elseif stanza == "message" then
+		st = verse.message{ to = self.peer }
+	end
+
+	local seq = self.oseq;
+	self.oseq = seq + 1;
+
+	st:tag("data", { xmlns = xmlns_ibb, sid = self.sid, seq = seq })
+		:text(base64.encode(data));
+
+	if stanza == "iq" then
+		self.stream:send_iq(st, function(reply)
+			self:event(reply.attr.type == "result" and "drained" or "error");
+		end)
+	else
+		stream:send(st)
+		self:event("drained");
+	end
+end
+
+function ibb_conn:feed(stanza)
+	if stanza.attr.from ~= self.peer then return end
+	local child = stanza[1];
+	if child.attr.sid ~= self.sid then return end
+	local ok;
+	if child.name == "open" then
+		self:event("connected");
+		self.stream:send(verse.reply(stanza))
+		return true
+	elseif child.name == "data" then
+		local bdata = stanza:get_child_text("data", xmlns_ibb);
+		local seq = tonumber(child.attr.seq);
+		local expected_seq = self.iseq;
+		if bdata and seq then
+			if seq ~= expected_seq then
+				self.stream:send(verse.error_reply(stanza, "cancel", "not-acceptable", "Wrong sequence. Packet lost?"))
+				self:close();
+				self:event("error");
+				return true;
+			end
+			self.iseq = seq + 1;
+			local data = base64.decode(bdata);
+			if self.stanza == "iq" then
+				self.stream:send(verse.reply(stanza))
+			end
+			self:event("incoming-raw", data);
+			return true;
+		end
+	elseif child.name == "close" then
+		self.stream:send(verse.reply(stanza))
+		self:close();
+		return true
+	end
+end
+
+--[[ FIXME some day
+function ibb_conn:receive(patt)
+	-- is this even used?
+	print("ibb_conn:receive("..tostring(patt)..")");
+	assert(patt == "*a" or tonumber(patt));
+	local data = t_concat(self.ibuffer):sub(self.pos, tonumber(patt) or nil);
+	self.pos = self.pos + #data;
+	return data
+end
+
+function ibb_conn:dirty()
+	print("ibb_conn:dirty()");
+	return false -- ????
+end
+function ibb_conn:getfd()
+	return 0
+end
+function ibb_conn:settimeout(n)
+	-- ignore?
+end
+-]]
+
+function ibb_conn:close()
+	self.stream:unhook("iq/".. xmlns_ibb, self.feeder)
+	self:event("disconnected");
+end
+
+function verse.plugins.jingle_ibb(stream)
+	stream:hook("ready", function ()
+		stream:add_disco_feature(xmlns_jingle_ibb);
+	end, 10);
+
+	local ibb = {};
+
+	function ibb:_setup()
+		local conn = new_ibb(self.stream);
+		conn.sid    = self.sid    or conn.sid;
+		conn.stanza = self.stanza or conn.stanza;
+		conn.block  = self.block  or conn.block;
+		conn:initiate(self.peer, self.sid, self.stanza);
+		self.conn = conn;
+	end
+	function ibb:generate_initiate()
+		print("ibb:generate_initiate() as ".. self.role);
+		local sid = uuid_generate();
+		self.sid = sid;
+		self.stanza = 'iq';
+		self.block = 2048;
+		local transport = verse.stanza("transport", { xmlns = xmlns_jingle_ibb,
+			sid = self.sid, stanza = self.stanza, ["block-size"] = self.block });
+		return transport;
+	end
+	function ibb:generate_accept(initiate_transport)
+		print("ibb:generate_accept() as ".. self.role);
+		local attr = initiate_transport.attr;
+		self.sid    = attr.sid    or self.sid;
+		self.stanza = attr.stanza or self.stanza;
+		self.block  = attr["block-size"] or self.block;
+		self:_setup();
+		return initiate_transport;
+	end
+	function ibb:connect(callback)
+		if not self.conn then
+			self:_setup();
+		end
+		local conn = self.conn;
+		print("ibb:connect() as ".. self.role);
+		if self.role == "initiator" then
+			conn:open(function(ok, ...)
+				assert(ok, table.concat({...}, ", "));
+				callback(conn);
+			end);
+		else
+			callback(conn);
+		end
+	end
+	function ibb:info_received(jingle_tag)
+		print("ibb:info_received()");
+		-- TODO, what exactly?
+	end
+	function ibb:disconnect()
+		if self.conn then
+			self.conn:close()
+		end
+	end
+	function ibb:handle_accepted(jingle_tag) end
+
+	local ibb_mt = { __index = ibb };
+	stream:hook("jingle/transport/"..xmlns_jingle_ibb, function (jingle)
+		return setmetatable({
+			role = jingle.role,
+			peer = jingle.peer,
+			stream = jingle.stream,
+			jingle = jingle,
+		}, ibb_mt);
+	end);
+end
+ end)
+package.preload['verse.plugins.pubsub'] = (function (...)
+local verse = require "verse";
+local jid_bare = require "util.jid".bare;
+
+local t_insert = table.insert;
+
+local xmlns_pubsub = "http://jabber.org/protocol/pubsub";
+local xmlns_pubsub_owner = "http://jabber.org/protocol/pubsub#owner";
+local xmlns_pubsub_event = "http://jabber.org/protocol/pubsub#event";
+local xmlns_pubsub_errors = "http://jabber.org/protocol/pubsub#errors";
+
+local pubsub = {};
+local pubsub_mt = { __index = pubsub };
+
+function verse.plugins.pubsub(stream)
+	stream.pubsub = setmetatable({ stream = stream }, pubsub_mt);
+	stream:hook("message", function (message)
+		local m_from = message.attr.from;
+		for pubsub_event in message:childtags("event", xmlns_pubsub_event) do
+			local items = pubsub_event:get_child("items");
+			if items then
+				local node = items.attr.node;
+				for item in items:childtags("item") do
+					stream:event("pubsub/event", {
+						from = m_from;
+						node = node;
+						item = item;
+					});
+				end
+			end
+		end
+	end);
+	return true;
+end
+
+-- COMPAT
+function pubsub:create(server, node, callback)
+	return self:service(server):node(node):create(nil, callback);
+end
+
+function pubsub:subscribe(server, node, jid, callback)
+	return self:service(server):node(node):subscribe(jid, nil, callback);
+end
+
+function pubsub:publish(server, node, id, item, callback)
+	return self:service(server):node(node):publish(id, nil, item, callback);
+end
+
+--------------------------------------------------------------------------
+---------------------New and improved PubSub interface--------------------
+--------------------------------------------------------------------------
+
+local pubsub_service = {};
+local pubsub_service_mt = { __index = pubsub_service };
+
+-- TODO should the property be named 'jid' instead?
+function pubsub:service(service)
+	return setmetatable({ stream = self.stream, service = service }, pubsub_service_mt)
+end
+
+-- Helper function for iq+pubsub tags
+
+local function pubsub_iq(iq_type, to, ns, op, node, jid, item_id)
+	local st = verse.iq{ type = iq_type or "get", to = to }
+		:tag("pubsub", { xmlns = ns or xmlns_pubsub }) -- ns would be ..#owner
+			if op then st:tag(op, { node = node, jid = jid }); end
+				if item_id then st:tag("item", { id = item_id ~= true and item_id or nil }); end
+	return st;
+end
+
+-- http://xmpp.org/extensions/xep-0060.html#entity-subscriptions
+function pubsub_service:subscriptions(callback)
+	self.stream:send_iq(pubsub_iq(nil, self.service, nil, "subscriptions")
+	, callback and function (result)
+		if result.attr.type == "result" then
+			local ps = result:get_child("pubsub", xmlns_pubsub);
+			local subs = ps and ps:get_child("subscriptions");
+			local nodes = {};
+			if subs then
+				for sub in subs:childtags("subscription") do
+					local node = self:node(sub.attr.node)
+					node.subscription = sub;
+					node.subscribed_jid = sub.attr.jid;
+					t_insert(nodes, node);
+					-- FIXME Good enough?
+					-- Or how about:
+					-- nodes[node] = sub;
+				end
+			end
+			callback(nodes);
+		else
+			callback(false, result:get_error());
+		end
+	end or nil);
+end
+
+-- http://xmpp.org/extensions/xep-0060.html#entity-affiliations
+function pubsub_service:affiliations(callback)
+	self.stream:send_iq(pubsub_iq(nil, self.service, nil, "affiliations")
+	, callback and function (result)
+		if result.attr.type == "result" then
+			local ps = result:get_child("pubsub", xmlns_pubsub);
+			local affils = ps and ps:get_child("affiliations") or {};
+			local nodes = {};
+			if affils then
+				for affil in affils:childtags("affiliation") do
+					local node = self:node(affil.attr.node)
+					node.affiliation = affil;
+					t_insert(nodes, node);
+					-- nodes[node] = affil;
+				end
+			end
+			callback(nodes);
+		else
+			callback(false, result:get_error());
+		end
+	end or nil);
+end
+
+function pubsub_service:nodes(callback)
+	self.stream:disco_items(self.service, nil, function(items, ...)
+		if items then
+			for i=1,#items do
+				items[i] = self:node(items[i].node);
+			end
+		end
+		callback(items, ...)
+	end);
+end
+
+local pubsub_node = {};
+local pubsub_node_mt = { __index = pubsub_node };
+
+function pubsub_service:node(node)
+	return setmetatable({ stream = self.stream, service = self.service, node = node }, pubsub_node_mt)
+end
+
+function pubsub_mt:__call(service, node)
+	local s = self:service(service);
+	return node and s:node(node) or s;
+end
+
+function pubsub_node:hook(callback, prio)
+	self._hooks = self._hooks or setmetatable({}, { __mode = 'kv' });
+	local function hook(event)
+		-- FIXME service == nil would mean anyone,
+		-- publishing would be go to your bare jid.
+		-- So if you're only interestied in your own
+		-- events, hook your own bare jid.
+		if (not event.service or event.from == self.service) and event.node == self.node then
+			return callback(event)
+		end
+	end
+	self._hooks[callback] = hook;
+	self.stream:hook("pubsub/event", hook, prio);
+	return hook;
+end
+
+function pubsub_node:unhook(callback)
+	if callback then
+		local hook = self._hooks[callback];
+		self.stream:unhook("pubsub/event", hook);
+	elseif self._hooks then
+		for hook in pairs(self._hooks) do
+			self.stream:unhook("pubsub/event", hook);
+		end
+	end
+end
+
+function pubsub_node:create(config, callback)
+	if config ~= nil then
+		error("Not implemented yet.");
+	else
+		self.stream:send_iq(pubsub_iq("set", self.service, nil, "create", self.node), callback);
+	end
+end
+
+-- <configure/> and <default/> rolled into one
+function pubsub_node:configure(config, callback)
+	if config ~= nil then
+		error("Not implemented yet.");
+		--[[
+		if config == true then
+			self.stream:send_iq(pubsub_iq("get", self.service, nil, "configure", self.node)
+			, function(reply)
+				local form = reply:get_child("pubsub"):get_child("configure"):get_cild("x");
+				local config = callback(require"util.dataforms".something(form))
+				self.stream:send_iq(pubsub_iq("set", config, ...))
+			end);
+		end
+		--]]
+		-- fetch form and pass it to the callback
+		-- which would process it and pass it back
+		-- and then we submit it
+		-- elseif type(config) == "table" then
+		-- it's a form or stanza that we submit
+		-- end
+		-- this would be done for everything that needs a config
+	end
+	self.stream:send_iq(pubsub_iq("set", self.service, nil, config == nil and "default" or "configure", self.node), callback);
+end
+
+function pubsub_node:publish(id, options, node, callback)
+	if options ~= nil then
+		error("Node configuration is not implemented yet.");
+	end
+	self.stream:send_iq(pubsub_iq("set", self.service, nil, "publish", self.node, nil, id or true)
+	:add_child(node)
+	, callback);
+end
+
+function pubsub_node:subscribe(jid, options, callback)
+	jid = jid or self.stream.jid;
+	if options ~= nil then
+		error("Subscription configuration is not implemented yet.");
+	end
+	self.stream:send_iq(pubsub_iq("set", self.service, nil, "subscribe", self.node, jid, id)
+	, callback);
+end
+
+function pubsub_node:subscription(callback)
+	error("Not implemented yet.");
+end
+
+function pubsub_node:affiliation(callback)
+	error("Not implemented yet.");
+end
+
+function pubsub_node:unsubscribe(jid, callback)
+	jid = jid or self.subscribed_jid or self.stream.jid;
+	self.stream:send_iq(pubsub_iq("set", self.service, nil, "unsubscribe", self.node, jid)
+	, callback);
+end
+
+function pubsub_node:configure_subscription(options, callback)
+	error("Not implemented yet.");
+end
+
+function pubsub_node:items(full, callback)
+	if full then
+		self.stream:send_iq(pubsub_iq("get", self.service, nil, "items", self.node)
+		, callback);
+	else
+		self.stream:disco_items(self.service, self.node, callback);
+	end
+end
+
+function pubsub_node:item(id, callback)
+	self.stream:send_iq(pubsub_iq("get", self.service, nil, "items", self.node, nil, id)
+	, callback);
+end
+
+function pubsub_node:retract(id, callback)
+	self.stream:send_iq(pubsub_iq("set", self.service, nil, "retract", self.node, nil, id)
+	, callback);
+end
+
+function pubsub_node:purge(notify, callback)
+	assert(not notify, "Not implemented yet.");
+	self.stream:send_iq(pubsub_iq("set", self.service, xmlns_pubsub_owner, "purge", self.node)
+	, callback);
+end
+
+function pubsub_node:delete(redirect_uri, callback)
+	assert(not redirect_uri, "Not implemented yet.");
+	self.stream:send_iq(pubsub_iq("set", self.service, xmlns_pubsub_owner, "delete", self.node)
+	, callback);
+end
+ end)
+package.preload['verse.plugins.pep'] = (function (...)
+local verse = require "verse";
+
+local xmlns_pubsub = "http://jabber.org/protocol/pubsub";
+local xmlns_pubsub_event = xmlns_pubsub.."#event";
+
+function verse.plugins.pep(stream)
+	stream:add_plugin("disco");
+	stream:add_plugin("pubsub");
+	stream.pep = {};
+	
+	stream:hook("pubsub/event", function(event)
+		return stream:event("pep/"..event.node, { from = event.from, item = event.item.tags[1] } );
+	end);
+	
+	function stream:hook_pep(node, callback, priority)
+		local handlers = stream.events._handlers["pep/"..node];
+		if not(handlers) or #handlers == 0 then
+			stream:add_disco_feature(node.."+notify");
+		end
+		stream:hook("pep/"..node, callback, priority);
+	end
+	
+	function stream:unhook_pep(node, callback)
+		stream:unhook("pep/"..node, callback);
+		local handlers = stream.events._handlers["pep/"..node];
+		if not(handlers) or #handlers == 0 then
+			stream:remove_disco_feature(node.."+notify");
+		end
+	end
+	
+	function stream:publish_pep(item, node)
+		return stream.pubsub:service(nil):node(node or item.attr.xmlns):publish(nil, nil, item)
+	end
+end
+ end)
+package.preload['verse.plugins.adhoc'] = (function (...)
+local verse = require "verse";
+local adhoc = require "lib.adhoc";
+
+local xmlns_commands = "http://jabber.org/protocol/commands";
+local xmlns_data = "jabber:x:data";
+
+local command_mt = {};
+command_mt.__index = command_mt;
+
+-- Table of commands we provide
+local commands = {};
+
+function verse.plugins.adhoc(stream)
+	stream:add_plugin("disco");
+	stream:add_disco_feature(xmlns_commands);
+
+	function stream:query_commands(jid, callback)
+		stream:disco_items(jid, xmlns_commands, function (items)
+			stream:debug("adhoc list returned")
+			local command_list = {};
+			for _, item in ipairs(items) do
+				command_list[item.node] = item.name;
+			end
+			stream:debug("adhoc calling callback")
+			return callback(command_list);
+		end);
+	end
+	
+	function stream:execute_command(jid, command, callback)
+		local cmd = setmetatable({
+			stream = stream, jid = jid,
+			command = command, callback = callback 
+		}, command_mt);
+		return cmd:execute();
+	end
+	
+	-- ACL checker for commands we provide
+	local function has_affiliation(jid, aff)
+		if not(aff) or aff == "user" then return true; end
+		if type(aff) == "function" then
+			return aff(jid);
+		end
+		-- TODO: Support 'roster', etc.
+	end
+	
+	function stream:add_adhoc_command(name, node, handler, permission)
+		commands[node] = adhoc.new(name, node, handler, permission);
+		stream:add_disco_item({ jid = stream.jid, node = node, name = name }, xmlns_commands);
+		return commands[node];
+	end
+	
+	local function handle_command(stanza)
+		local command_tag = stanza.tags[1];
+		local node = command_tag.attr.node;
+		
+		local handler = commands[node];
+		if not handler then return; end
+		
+		if not has_affiliation(stanza.attr.from, handler.permission) then
+			stream:send(verse.error_reply(stanza, "auth", "forbidden", "You don't have permission to execute this command"):up()
+			:add_child(handler:cmdtag("canceled")
+				:tag("note", {type="error"}):text("You don't have permission to execute this command")));
+			return true
+		end
+		
+		-- User has permission now execute the command
+		return adhoc.handle_cmd(handler, { send = function (d) return stream:send(d) end }, stanza);
+	end
+	
+	stream:hook("iq/"..xmlns_commands, function (stanza)
+		local type = stanza.attr.type;
+		local name = stanza.tags[1].name;
+		if type == "set" and name == "command" then
+			return handle_command(stanza);
+		end
+	end);
+end
+
+function command_mt:_process_response(result)
+	if result.attr.type == "error" then
+		self.status = "canceled";
+		self.callback(self, {});
+		return;
+	end
+	local command = result:get_child("command", xmlns_commands);
+	self.status = command.attr.status;
+	self.sessionid = command.attr.sessionid;
+	self.form = command:get_child("x", xmlns_data);
+	self.note = command:get_child("note"); --FIXME handle multiple <note/>s
+	self.callback(self);
+end
+
+-- Initial execution of a command
+function command_mt:execute()
+	local iq = verse.iq({ to = self.jid, type = "set" })
+		:tag("command", { xmlns = xmlns_commands, node = self.command });
+	self.stream:send_iq(iq, function (result)
+		self:_process_response(result);
+	end);
+end
+
+function command_mt:next(form)
+	local iq = verse.iq({ to = self.jid, type = "set" })
+		:tag("command", {
+			xmlns = xmlns_commands,
+			node = self.command,
+			sessionid = self.sessionid
+		});
+	
+	if form then iq:add_child(form); end
+	
+	self.stream:send_iq(iq, function (result)
+		self:_process_response(result);
+	end);
+end
+ end)
+package.preload['verse.plugins.presence'] = (function (...)
+local verse = require "verse";
+
+function verse.plugins.presence(stream)
+	stream.last_presence = nil;
+
+	stream:hook("presence-out", function (presence)
+		if not presence.attr.to then
+			stream.last_presence = presence; -- Cache non-directed presence
+		end
+	end, 1);
+
+	function stream:resend_presence()
+		if last_presence then
+			stream:send(last_presence);
+		end
+	end
+
+	function stream:set_status(opts)
+		local p = verse.presence();
+		if type(opts) == "table" then
+			if opts.show then
+				p:tag("show"):text(opts.show):up();
+			end
+			if opts.prio then
+				p:tag("priority"):text(tostring(opts.prio)):up();
+			end
+			if opts.msg then
+				p:tag("status"):text(opts.msg):up();
+			end
+		end
+		-- TODO maybe use opts as prio if it's a int,
+		-- or as show or status if it's a string?
+
+		stream:send(p);
+	end
+end
+ end)
+package.preload['verse.plugins.private'] = (function (...)
+local verse = require "verse";
+
+-- Implements XEP-0049: Private XML Storage
+
+local xmlns_private = "jabber:iq:private";
+
+function verse.plugins.private(stream)
+	function stream:private_set(name, xmlns, data, callback)
+		local iq = verse.iq({ type = "set" })
+			:tag("query", { xmlns = xmlns_private });
+		if data then
+			if data.name == name and data.attr and data.attr.xmlns == xmlns then
+				iq:add_child(data);
+			else
+				iq:tag(name, { xmlns = xmlns })
+					:add_child(data);
+			end
+		end
+		self:send_iq(iq, callback);
+	end
+	
+	function stream:private_get(name, xmlns, callback)
+		self:send_iq(verse.iq({type="get"})
+			:tag("query", { xmlns = xmlns_private })
+				:tag(name, { xmlns = xmlns }),
+			function (reply)
+				if reply.attr.type == "result" then
+					local query = reply:get_child("query", xmlns_private);
+					local result = query:get_child(name, xmlns);
+					callback(result);
+				end
+			end);
+	end
+end
+
+ end)
+package.preload['verse.plugins.roster'] = (function (...)
+local verse = require "verse";
+local bare_jid = require "util.jid".bare;
+
+local xmlns_roster = "jabber:iq:roster";
+local xmlns_rosterver = "urn:xmpp:features:rosterver";
+local t_insert = table.insert;
+
+function verse.plugins.roster(stream)
+	local ver_supported = false;
+	local roster = {
+		items = {};
+		ver = "";
+		-- TODO:
+		-- groups = {};
+	};
+	stream.roster = roster;
+
+	stream:hook("stream-features", function(features_stanza)
+		if features_stanza:get_child("ver", xmlns_rosterver) then
+			ver_supported = true;
+		end
+	end);
+
+	local function item_lua2xml(item_table)
+		local xml_item = verse.stanza("item", { xmlns = xmlns_roster });
+		for k, v in pairs(item_table) do
+			if k ~= "groups" then 
+				xml_item.attr[k] = v;
+			else
+				for i = 1,#v do
+					xml_item:tag("group"):text(v[i]):up();
+				end
+			end
+		end
+		return xml_item;
+	end
+
+	local function item_xml2lua(xml_item)
+		local item_table = { };
+		local groups = {};
+		item_table.groups = groups;
+		local jid = xml_item.attr.jid;
+
+		for k, v in pairs(xml_item.attr) do
+			if k ~= "xmlns" then
+				item_table[k] = v
+			end
+		end
+
+		for group in xml_item:childtags("group") do
+			t_insert(groups, group:get_text())
+		end
+		return item_table;
+	end
+
+	function roster:load(r)
+		roster.ver, roster.items = r.ver, r.items;
+	end
+
+	function roster:dump()
+		return {
+			ver = roster.ver,
+			items = roster.items,
+		};
+	end
+
+	-- should this be add_contact(item, callback) instead?
+	function roster:add_contact(jid, name, groups, callback)
+		local item = { jid = jid, name = name, groups = groups };
+		local stanza = verse.iq({ type = "set" })
+			:tag("query", { xmlns = xmlns_roster })
+				:add_child(item_lua2xml(item));
+		stream:send_iq(stanza, function (reply)
+			if not callback then return end
+			if reply.attr.type == "result" then
+				callback(true);
+			else
+				local type, condition, text = reply:get_error();
+				callback(nil, { type, condition, text });
+			end
+		end);
+	end
+	-- What about subscriptions?
+
+	function roster:delete_contact(jid, callback)
+		jid = (type(jid) == "table" and jid.jid) or jid;
+		local item = { jid = jid, subscription = "remove" }
+		if not roster.items[jid] then return false, "item-not-found"; end
+		stream:send_iq(verse.iq({ type = "set" })
+			:tag("query", { xmlns = xmlns_roster })
+				:add_child(item_lua2xml(item)),
+			function (reply)
+				if not callback then return end
+				if reply.attr.type == "result" then
+					callback(true);
+				else
+					local type, condition, text = reply:get_error();
+					callback(nil, { type, condition, text });
+				end
+			end);
+	end
+
+	local function add_item(item) -- Takes one roster <item/>
+		local roster_item = item_xml2lua(item);
+		roster.items[roster_item.jid] = roster_item;
+	end
+
+	-- Private low level
+	local function delete_item(jid)
+		local deleted_item = roster.items[jid];
+		roster.items[jid] = nil;
+		return deleted_item;
+	end
+
+	function roster:fetch(callback)
+		stream:send_iq(verse.iq({type="get"}):tag("query", { xmlns = xmlns_roster, ver = ver_supported and roster.ver or nil }),
+			function (result)
+				if result.attr.type == "result" then
+					local query = result:get_child("query", xmlns_roster);
+					if query then
+						roster.items = {};
+						for item in query:childtags("item") do
+							add_item(item)
+						end
+						roster.ver = query.attr.ver or "";
+					end
+					callback(roster);
+				else
+					local type, condition, text = stanza:get_error();
+					callback(nil, { type, condition, text }); --FIXME
+				end
+			end);
+	end
+
+	stream:hook("iq/"..xmlns_roster, function(stanza)
+		local type, from = stanza.attr.type, stanza.attr.from;
+		if type == "set" and (not from or from == bare_jid(stream.jid)) then
+			local query = stanza:get_child("query", xmlns_roster);
+			local item = query and query:get_child("item");
+			if item then
+				local event, target;
+				local jid = item.attr.jid;
+				if item.attr.subscription == "remove" then
+					event = "removed"
+					target = delete_item(jid);
+				else
+					event = roster.items[jid] and "changed" or "added";
+					add_item(item)
+					target = roster.items[jid];
+				end
+				roster.ver = query.attr.ver;
+				if target then
+					stream:event("roster/item-"..event, target);
+				end
+			-- TODO else return error? Events?
+			end
+			stream:send(verse.reply(stanza))
+			return true;
+		end
+	end);
+end
+ end)
+package.preload['verse.plugins.register'] = (function (...)
+local verse = require "verse";
+
+local xmlns_register = "jabber:iq:register";
+
+function verse.plugins.register(stream)
+	local function handle_features(features_stanza)
+		if features_stanza:get_child("register", "http://jabber.org/features/iq-register") then
+			local request = verse.iq({ to = stream.host_, type = "set" })
+				:tag("query", { xmlns = xmlns_register })
+					:tag("username"):text(stream.username):up()
+					:tag("password"):text(stream.password):up();
+			if stream.register_email then
+				request:tag("email"):text(stream.register_email):up();
+			end
+			stream:send_iq(request, function (result)
+				if result.attr.type == "result" then
+					stream:event("registration-success");
+				else
+					local type, condition, text = result:get_error();
+					stream:debug("Registration failed: %s", condition);
+					stream:event("registration-failure", { type = type, condition = condition, text = text });
+				end
+			end);
+		else
+			stream:debug("In-band registration not offered by server");
+			stream:event("registration-failure", { condition = "service-unavailable" });
+		end
+		stream:unhook("stream-features", handle_features);
+		return true;
+	end
+	stream:hook("stream-features", handle_features, 310);
+end
+ end)
+package.preload['verse.plugins.groupchat'] = (function (...)
+local verse = require "verse";
+local events = require "events";
+local jid = require "util.jid";
+
+local room_mt = {};
+room_mt.__index = room_mt;
+
+local xmlns_delay = "urn:xmpp:delay";
+local xmlns_muc = "http://jabber.org/protocol/muc";
+
+function verse.plugins.groupchat(stream)
+	stream:add_plugin("presence")
+	stream.rooms = {};
+	
+	stream:hook("stanza", function (stanza)
+		local room_jid = jid.bare(stanza.attr.from);
+		if not room_jid then return end
+		local room = stream.rooms[room_jid]
+		if not room and stanza.attr.to and room_jid then
+			room = stream.rooms[stanza.attr.to.." "..room_jid]
+		end
+		if room and room.opts.source and stanza.attr.to ~= room.opts.source then return end
+		if room then
+			local nick = select(3, jid.split(stanza.attr.from));
+			local body = stanza:get_child_text("body");
+			local delay = stanza:get_child("delay", xmlns_delay);
+			local event = {
+				room_jid = room_jid;
+				room = room;
+				sender = room.occupants[nick];
+				nick = nick;
+				body = body;
+				stanza = stanza;
+				delay = (delay and delay.attr.stamp);
+			};
+			local ret = room:event(stanza.name, event);
+			return ret or (stanza.name == "message") or nil;
+		end
+	end, 500);
+	
+	function stream:join_room(jid, nick, opts)
+		if not nick then
+			return false, "no nickname supplied"
+		end
+		opts = opts or {};
+		local room = setmetatable(verse.eventable{
+			stream = stream, jid = jid, nick = nick,
+			subject = nil,
+			occupants = {},
+			opts = opts,
+		}, room_mt);
+		if opts.source then
+			self.rooms[opts.source.." "..jid] = room;
+		else
+			self.rooms[jid] = room;
+		end
+		local occupants = room.occupants;
+		room:hook("presence", function (presence)
+			local nick = presence.nick or nick;
+			if not occupants[nick] and presence.stanza.attr.type ~= "unavailable" then
+				occupants[nick] = {
+					nick = nick;
+					jid = presence.stanza.attr.from;
+					presence = presence.stanza;
+				};
+				local x = presence.stanza:get_child("x", xmlns_muc .. "#user");
+				if x then
+					local x_item = x:get_child("item");
+					if x_item and x_item.attr then
+						occupants[nick].real_jid    = x_item.attr.jid;
+						occupants[nick].affiliation = x_item.attr.affiliation;
+						occupants[nick].role        = x_item.attr.role;
+					end
+					--TODO Check for status 100?
+				end
+				if nick == room.nick then
+					room.stream:event("groupchat/joined", room);
+				else
+					room:event("occupant-joined", occupants[nick]);
+				end
+			elseif occupants[nick] and presence.stanza.attr.type == "unavailable" then
+				if nick == room.nick then
+					room.stream:event("groupchat/left", room);
+					if room.opts.source then
+						self.rooms[room.opts.source.." "..jid] = nil;
+					else
+						self.rooms[jid] = nil;
+					end
+				else
+					occupants[nick].presence = presence.stanza;
+					room:event("occupant-left", occupants[nick]);
+					occupants[nick] = nil;
+				end
+			end
+		end);
+		room:hook("message", function(event)
+			local subject = event.stanza:get_child_text("subject");
+			if not subject then return end
+			subject = #subject > 0 and subject or nil;
+			if subject ~= room.subject then
+				local old_subject = room.subject;
+				room.subject = subject;
+				return room:event("subject-changed", { from = old_subject, to = subject, by = event.sender, event = event });
+			end
+		end, 2000);
+		local join_st = verse.presence():tag("x",{xmlns = xmlns_muc}):reset();
+		self:event("pre-groupchat/joining", join_st);
+		room:send(join_st)
+		self:event("groupchat/joining", room);
+		return room;
+	end
+
+	stream:hook("presence-out", function(presence)
+		if not presence.attr.to then
+			for _, room in pairs(stream.rooms) do
+				room:send(presence);
+			end
+			presence.attr.to = nil;
+		end
+	end);
+end
+
+function room_mt:send(stanza)
+	if stanza.name == "message" and not stanza.attr.type then
+		stanza.attr.type = "groupchat";
+	end
+	if stanza.name == "presence" then
+		stanza.attr.to = self.jid .."/"..self.nick;
+	end
+	if stanza.attr.type == "groupchat" or not stanza.attr.to then
+		stanza.attr.to = self.jid;
+	end
+	if self.opts.source then
+		stanza.attr.from = self.opts.source
+	end
+	self.stream:send(stanza);
+end
+
+function room_mt:send_message(text)
+	self:send(verse.message():tag("body"):text(text));
+end
+
+function room_mt:set_subject(text)
+	self:send(verse.message():tag("subject"):text(text));
+end
+
+function room_mt:leave(message)
+	self.stream:event("groupchat/leaving", self);
+	local presence = verse.presence({type="unavailable"});
+	if message then
+		presence:tag("status"):text(message);
+	end
+	self:send(presence);
+end
+
+function room_mt:admin_set(nick, what, value, reason)
+	self:send(verse.iq({type="set"})
+		:query(xmlns_muc .. "#admin")
+			:tag("item", {nick = nick, [what] = value})
+				:tag("reason"):text(reason or ""));
+end
+
+function room_mt:set_role(nick, role, reason)
+	self:admin_set(nick, "role", role, reason);
+end
+
+function room_mt:set_affiliation(nick, affiliation, reason)
+	self:admin_set(nick, "affiliation", affiliation, reason);
+end
+
+function room_mt:kick(nick, reason)
+	self:set_role(nick, "none", reason);
+end
+
+function room_mt:ban(nick, reason)
+	self:set_affiliation(nick, "outcast", reason);
+end
+ end)
+package.preload['verse.plugins.vcard'] = (function (...)
+local verse = require "verse";
+local vcard = require "util.vcard";
+
+local xmlns_vcard = "vcard-temp";
+
+function verse.plugins.vcard(stream)
+	function stream:get_vcard(jid, callback) --jid = nil for self
+		stream:send_iq(verse.iq({to = jid, type="get"})
+			:tag("vCard", {xmlns=xmlns_vcard}), callback and function(stanza)
+				local lCard, xCard;
+				vCard = stanza:get_child("vCard", xmlns_vcard);
+				if stanza.attr.type == "result" and vCard then
+					vCard = vcard.from_xep54(vCard)
+					callback(vCard)
+				else
+					callback(false) -- FIXME add error
+				end
+			end or nil);
+	end
+
+	function stream:set_vcard(aCard, callback)
+		local xCard;
+		if type(aCard) == "table" and aCard.name then
+			xCard = aCard;
+		elseif type(aCard) == "string" then
+			xCard = vcard.to_xep54(vcard.from_text(aCard)[1]);
+		elseif type(aCard) == "table" then
+			xCard = vcard.to_xep54(aCard);
+			error("Converting a table to vCard not implemented")
+		end
+		if not xCard then return false end
+		stream:debug("setting vcard to %s", tostring(xCard));
+		stream:send_iq(verse.iq({type="set"})
+			:add_child(xCard), callback);
+	end
+end
+ end)
+package.preload['verse.plugins.vcard_update'] = (function (...)
+local verse = require "verse";
+
+local xmlns_vcard, xmlns_vcard_update = "vcard-temp", "vcard-temp:x:update";
+
+-- MMMmmmm.. hacky
+local ok, fun = pcall(function() return require("util.hashes").sha1; end);
+if not ok then
+	ok, fun = pcall(function() return require("util.sha1").sha1; end);
+	if not ok then
+		error("Could not find a sha1()")
+	end
+end
+local sha1 = fun;
+
+local ok, fun = pcall(function()
+	local unb64 = require("util.encodings").base64.decode;
+	assert(unb64("SGVsbG8=") == "Hello")
+	return unb64;
 end);
+if not ok then
+	ok, fun = pcall(function() return require("mime").unb64; end);
+	if not ok then
+		error("Could not find a base64 decoder")
+	end
 end
-e:hook("stream-features",o,200);
-return true;
+local unb64 = fun;
+
+function verse.plugins.vcard_update(stream)
+	stream:add_plugin("vcard");
+	stream:add_plugin("presence");
+
+
+	local x_vcard_update;
+
+	function update_vcard_photo(vCard) 
+		local data;
+		for i=1,#vCard do
+			if vCard[i].name == "PHOTO" then
+				data = vCard[i][1];
+				break
+			end
+		end
+		if data then
+			local hash = sha1(unb64(data), true);
+			x_vcard_update = verse.stanza("x", { xmlns = xmlns_vcard_update })
+			:tag("photo"):text(hash);
+
+			stream:resend_presence()
+		else
+			x_vcard_update = nil;
+		end
+	end
+
+	local _set_vcard = stream.set_vcard;
+
+	--[[ TODO Complete this, it's probably broken.
+	-- Maybe better to hook outgoing stanza?
+	function stream:set_vcard(vCard, callback)
+		_set_vcard(vCard, function(event, ...)
+			if event.attr.type == "result" then
+				local vCard_ = response:get_child("vCard", xmlns_vcard);
+				if vCard_ then
+					update_vcard_photo(vCard_);
+				end -- Or fetch it again? Seems wasteful, but if the server overrides stuff? :/
+			end
+			if callback then
+				return callback(event, ...);
+			end
+		end);
+	end
+	--]]
+
+	local initial_vcard_fetch_started;
+	stream:hook("ready", function(event)
+		if initial_vcard_fetch_started then return; end
+		initial_vcard_fetch_started = true;
+		-- if stream:jid_supports(nil, xmlns_vcard) then TODO this, correctly
+		stream:get_vcard(nil, function(response)
+			if response then
+				update_vcard_photo(response)
+			end
+			stream:event("ready");
+		end);
+		return true;
+	end, 3);
+
+	stream:hook("presence-out", function(presence)
+		if x_vcard_update and not presence:get_child("x", xmlns_vcard_update) then
+			presence:add_child(x_vcard_update);
+		end
+	end, 10);
+
+	--[[
+	stream:hook("presence", function(presence)
+			local x_vcard_update = presence:get_child("x", xmlns_vcard_update);
+			local photo_hash = x_vcard_update and x_vcard_update:get_child("photo");
+				:get_child_text("photo");
+			if x_vcard_update then
+				-- TODO Cache peoples avatars here
+			end
+	end);
+	--]]
 end
-end)
-package.preload['verse.plugins.session']=(function(...)
-local t=require"verse";
-local a="urn:ietf:params:xml:ns:xmpp-session";
-function t.plugins.session(e)
-local function i(o)
-local o=o:get_child("session",a);
-if o and not o:get_child("optional")then
-local function o(o)
-e:debug("Establishing Session...");
-e:send_iq(t.iq({type="set"}):tag("session",{xmlns=a}),
-function(t)
-if t.attr.type=="result"then
-e:event("session-success");
-elseif t.attr.type=="error"then
-local a=t:child_with_name("error");
-local o,a,t=t:get_error();
-e:event("session-failure",{error=a,text=t,type=o});
+ end)
+package.preload['verse.plugins.carbons'] = (function (...)
+local verse = require "verse";
+
+local xmlns_carbons = "urn:xmpp:carbons:2";
+local xmlns_forward = "urn:xmpp:forward:0";
+local os_time = os.time;
+local parse_datetime = require "util.datetime".parse;
+local bare_jid = require "util.jid".bare;
+
+-- TODO Check disco for support
+
+function verse.plugins.carbons(stream)
+	local carbons = {};
+	carbons.enabled = false;
+	stream.carbons = carbons;
+
+	function carbons:enable(callback)
+		stream:send_iq(verse.iq{type="set"}
+		:tag("enable", { xmlns = xmlns_carbons })
+		, function(result)
+			local success = result.attr.type == "result";
+			if success then
+				carbons.enabled = true;
+			end
+			if callback then
+				callback(success);
+			end
+		end or nil);
+	end
+
+	function carbons:disable(callback)
+		stream:send_iq(verse.iq{type="set"}
+		:tag("disable", { xmlns = xmlns_carbons })
+		, function(result)
+			local success = result.attr.type == "result";
+			if success then
+				carbons.enabled = false;
+			end
+			if callback then
+				callback(success);
+			end
+		end or nil);
+	end
+
+	local my_bare;
+	stream:hook("bind-success", function()
+		my_bare = bare_jid(stream.jid);
+	end);
+
+	stream:hook("message", function(stanza)
+		local carbon = stanza:get_child(nil, xmlns_carbons);
+		if stanza.attr.from == my_bare and carbon then
+			local carbon_dir = carbon.name;
+			local fwd = carbon:get_child("forwarded", xmlns_forward);
+			local fwd_stanza = fwd and fwd:get_child("message", "jabber:client");
+			local delay = fwd:get_child("delay", "urn:xmpp:delay");
+			local stamp = delay and delay.attr.stamp;
+			stamp = stamp and parse_datetime(stamp);
+			if fwd_stanza then
+				return stream:event("carbon", {
+					dir = carbon_dir,
+					stanza = fwd_stanza,
+					timestamp = stamp or os_time(),
+				});
+			end
+		end
+	end, 1);
 end
-end);
-return true;
-end
-e:hook("bind-success",o);
-end
-end
-e:hook("stream-features",i);
-return true;
-end
-end)
-package.preload['verse.plugins.legacy']=(function(...)
-local i=require"verse";
-local n=require"util.uuid".generate;
-local o="jabber:iq:auth";
-function i.plugins.legacy(e)
-function handle_auth_form(t)
-local a=t:get_child("query",o);
-if t.attr.type~="result"or not a then
-local t,a,o=t:get_error();
-e:debug("warn","%s %s: %s",t,a,o);
-end
-local t={
-username=e.username;
-password=e.password;
-resource=e.resource or n();
-digest=false,sequence=false,token=false;
+ end)
+package.preload['verse.plugins.archive'] = (function (...)
+-- This implements XEP-0313: Message Archive Management
+-- http://xmpp.org/extensions/xep-0313.html
+-- (ie not XEP-0136)
+
+local verse = require "verse";
+local st = require "util.stanza";
+local xmlns_mam = "urn:xmpp:mam:0"
+local xmlns_forward = "urn:xmpp:forward:0";
+local xmlns_delay = "urn:xmpp:delay";
+local uuid = require "util.uuid".generate;
+local parse_datetime = require "util.datetime".parse;
+local datetime = require "util.datetime".datetime;
+local dataform = require"util.dataforms".new;
+local rsm = require "util.rsm";
+local NULL = {};
+
+local query_form = dataform {
+	{ name = "FORM_TYPE"; type = "hidden"; value = xmlns_mam; };
+	{ name = "with"; type = "jid-single"; };
+	{ name = "start"; type = "text-single" };
+	{ name = "end"; type = "text-single"; };
 };
-local o=i.iq({to=e.host,type="set"})
-:tag("query",{xmlns=o});
-if#a>0 then
-for a in a:childtags()do
-local a=a.name;
-local i=t[a];
-if i then
-o:tag(a):text(t[a]):up();
-elseif i==nil then
-local t="feature-not-implemented";
-e:event("authentication-failure",{condition=t});
-return false;
-end
-end
-else
-for t,e in pairs(t)do
-if e then
-o:tag(t):text(e):up();
-end
-end
-end
-e:send_iq(o,function(a)
-if a.attr.type=="result"then
-e.resource=t.resource;
-e.jid=t.username.."@"..e.host.."/"..t.resource;
-e:event("authentication-success");
-e:event("bind-success",e.jid);
-else
-local a,t,a=a:get_error();
-e:event("authentication-failure",{condition=t});
-end
-end);
-end
-function handle_opened(t)
-if not t.version then
-e:send_iq(i.iq({type="get"})
-:tag("query",{xmlns="jabber:iq:auth"})
-:tag("username"):text(e.username),
-handle_auth_form);
-end
-end
-e:hook("opened",handle_opened);
-end
-end)
-package.preload['verse.plugins.compression']=(function(...)
-local t=require"verse";
-local i=require"zlib";
-local e="http://jabber.org/features/compress"
-local a="http://jabber.org/protocol/compress"
-local e="http://etherx.jabber.org/streams";
-local e=9;
-local function r(o)
-local i,e=pcall(i.deflate,e);
-if i==false then
-local t=t.stanza("failure",{xmlns=a}):tag("setup-failed");
-o:send(t);
-o:error("Failed to create zlib.deflate filter: %s",tostring(e));
-return
-end
-return e
-end
-local function d(e)
-local i,o=pcall(i.inflate);
-if i==false then
-local t=t.stanza("failure",{xmlns=a}):tag("setup-failed");
-e:send(t);
-e:error("Failed to create zlib.inflate filter: %s",tostring(o));
-return
-end
-return o
-end
-local function l(e,i)
-function e:send(o)
-local i,o,n=pcall(i,tostring(o),'sync');
-if i==false then
-e:close({
-condition="undefined-condition";
-text=o;
-extra=t.stanza("failure",{xmlns=a}):tag("processing-failed");
-});
-e:warn("Compressed send failed: %s",tostring(o));
-return;
-end
-e.conn:write(o);
-end;
-end
-local function h(e,n)
-local s=e.data
-e.data=function(i,o)
-e:debug("Decompressing data...");
-local n,o,h=pcall(n,o);
-if n==false then
-e:close({
-condition="undefined-condition";
-text=o;
-extra=t.stanza("failure",{xmlns=a}):tag("processing-failed");
-});
-stream:warn("%s",tostring(o));
-return;
-end
-return s(i,o);
-end;
-end
-function t.plugins.compression(e)
-local function i(o)
-if not e.compressed then
-local o=o:child_with_name("compression");
-if o then
-for o in o:children()do
-local o=o[1]
-if o=="zlib"then
-e:send(t.stanza("compress",{xmlns=a}):tag("method"):text("zlib"))
-e:debug("Enabled compression using zlib.")
-return true;
-end
-end
-session:debug("Remote server supports no compression algorithm we support.")
-end
-end
-end
-local function o(a)
-if a.name=="compressed"then
-e:debug("Activating compression...")
-local a=r(e);
-if not a then return end
-local t=d(e);
-if not t then return end
-l(e,a);
-h(e,t);
-e.compressed=true;
-e:reopen();
-elseif a.name=="failure"then
-e:warn("Failed to establish compression");
-end
-end
-e:hook("stream-features",i,250);
-e:hook("stream/"..a,o);
-end
-end)
-package.preload['verse.plugins.smacks']=(function(...)
-local n=require"verse";
-local h=socket.gettime;
-local s="urn:xmpp:sm:2";
-function n.plugins.smacks(e)
-local t={};
-local o=0;
-local r=h();
-local a;
-local i=0;
-local function d(t)
-if t.attr.xmlns=="jabber:client"or not t.attr.xmlns then
-i=i+1;
-e:debug("Increasing handled stanzas to %d for %s",i,t:top_tag());
-end
-end
-function outgoing_stanza(o)
-if o.name and not o.attr.xmlns then
-t[#t+1]=tostring(o);
-r=h();
-if not a then
-a=true;
-e:debug("Waiting to send ack request...");
-n.add_task(1,function()
-if#t==0 then
-a=false;
-return;
-end
-local o=h()-r;
-if o<1 and#t<10 then
-return 1-o;
-end
-e:debug("Time up, sending <r>...");
-a=false;
-e:send(n.stanza("r",{xmlns=s}));
-end);
-end
-end
-end
-local function h()
-e:debug("smacks: connection lost");
-e.stream_management_supported=nil;
-if e.resumption_token then
-e:debug("smacks: have resumption token, reconnecting in 1s...");
-e.authenticated=nil;
-n.add_task(1,function()
-e:connect(e.connect_host or e.host,e.connect_port or 5222);
-end);
-return true;
-end
-end
-local function r()
-e.resumption_token=nil;
-e:unhook("disconnected",h);
-end
-local function l(a)
-if a.name=="r"then
-e:debug("Ack requested... acking %d handled stanzas",i);
-e:send(n.stanza("a",{xmlns=s,h=tostring(i)}));
-elseif a.name=="a"then
-local a=tonumber(a.attr.h);
-if a>o then
-local i=#t;
-for a=o+1,a do
-table.remove(t,1);
-end
-e:debug("Received ack: New ack: "..a.." Last ack: "..o.." Unacked stanzas now: "..#t.." (was "..i..")");
-o=a;
-else
-e:warn("Received bad ack for "..a.." when last ack was "..o);
-end
-elseif a.name=="enabled"then
-if a.attr.id then
-e.resumption_token=a.attr.id;
-e:hook("closed",r,100);
-e:hook("disconnected",h,100);
-end
-elseif a.name=="resumed"then
-local a=tonumber(a.attr.h);
-if a>o then
-local i=#t;
-for a=o+1,a do
-table.remove(t,1);
-end
-e:debug("Received ack: New ack: "..a.." Last ack: "..o.." Unacked stanzas now: "..#t.." (was "..i..")");
-o=a;
-end
-for a=1,#t do
-e:send(t[a]);
-end
-t={};
-e:debug("Resumed successfully");
-e:event("resumed");
-else
-e:warn("Don't know how to handle "..s.."/"..a.name);
-end
-end
-local function a()
-if not e.smacks then
-e:debug("smacks: sending enable");
-e:send(n.stanza("enable",{xmlns=s,resume="true"}));
-e.smacks=true;
-e:hook("stanza",d);
-e:hook("outgoing",outgoing_stanza);
-end
-end
-local function o(t)
-if t:get_child("sm",s)then
-e.stream_management_supported=true;
-if e.smacks and e.bound then
-e:debug("Resuming stream with %d handled stanzas",i);
-e:send(n.stanza("resume",{xmlns=s,
-h=i,previd=e.resumption_token}));
-return true;
-else
-e:hook("bind-success",a,1);
-end
-end
-end
-e:hook("stream-features",o,250);
-e:hook("stream/"..s,l);
-end
-end)
-package.preload['verse.plugins.keepalive']=(function(...)
-local t=require"verse";
-function t.plugins.keepalive(e)
-e.keepalive_timeout=e.keepalive_timeout or 300;
-t.add_task(e.keepalive_timeout,function()
-e.conn:write(" ");
-return e.keepalive_timeout;
-end);
-end
-end)
-package.preload['verse.plugins.disco']=(function(...)
-local a=require"verse";
-local r=require("mime").b64;
-local s=require("util.sha1").sha1;
-local n="http://jabber.org/protocol/caps";
-local e="http://jabber.org/protocol/disco";
-local o=e.."#info";
-local i=e.."#items";
-function a.plugins.disco(e)
-e:add_plugin("presence");
-local t={
-__index=function(t,e)
-local a={identities={},features={}};
-if e=="identities"or e=="features"then
-return t[false][e]
-end
-t[e]=a;
-return a;
-end,
-};
-local h={
-__index=function(t,a)
-local e={};
-t[a]=e;
-return e;
-end,
-};
-e.disco={
-cache={},
-info=setmetatable({
-[false]={
-identities={
-{category='client',type='pc',name='Verse'},
-},
-features={
-[n]=true,
-[o]=true,
-[i]=true,
-},
-},
-},t);
-items=setmetatable({[false]={}},h);
-};
-e.caps={}
-e.caps.node='http://code.matthewwild.co.uk/verse/'
-local function h(t,e)
-if t.category<e.category then
-return true;
-elseif e.category<t.category then
-return false;
-end
-if t.type<e.type then
-return true;
-elseif e.type<t.type then
-return false;
-end
-if(not t['xml:lang']and e['xml:lang'])or
-(e['xml:lang']and t['xml:lang']<e['xml:lang'])then
-return true
-end
-return false
-end
-local function d(e,t)
-return e.var<t.var
-end
-local function l(t)
-local o=e.disco.info[t or false].identities;
-table.sort(o,h)
-local a={};
-for e in pairs(e.disco.info[t or false].features)do
-a[#a+1]={var=e};
-end
-table.sort(a,d)
-local e={};
-for a,t in pairs(o)do
-e[#e+1]=table.concat({
-t.category,t.type or'',
-t['xml:lang']or'',t.name or''
-},'/');
-end
-for a,t in pairs(a)do
-e[#e+1]=t.var
-end
-e[#e+1]='';
-e=table.concat(e,'<');
-return(r(s(e)))
-end
-setmetatable(e.caps,{
-__call=function(...)
-local t=l()
-e.caps.hash=t;
-return a.stanza('c',{
-xmlns=n,
-hash='sha-1',
-node=e.caps.node,
-ver=t
-})
-end
-})
-function e:set_identity(t,a)
-self.disco.info[a or false].identities={t};
-e:resend_presence();
-end
-function e:add_identity(a,t)
-local t=self.disco.info[t or false].identities;
-t[#t+1]=a;
-e:resend_presence();
-end
-function e:add_disco_feature(t,a)
-local t=t.var or t;
-self.disco.info[a or false].features[t]=true;
-e:resend_presence();
-end
-function e:remove_disco_feature(t,a)
-local t=t.var or t;
-self.disco.info[a or false].features[t]=nil;
-e:resend_presence();
-end
-function e:add_disco_item(t,e)
-local e=self.disco.items[e or false];
-e[#e+1]=t;
-end
-function e:remove_disco_item(a,e)
-local e=self.disco.items[e or false];
-for t=#e,1,-1 do
-if e[t]==a then
-table.remove(e,t);
-end
-end
-end
-function e:jid_has_identity(e,t,a)
-local o=self.disco.cache[e];
-if not o then
-return nil,"no-cache";
-end
-local e=self.disco.cache[e].identities;
-if a then
-return e[t.."/"..a]or false;
-end
-for e in pairs(e)do
-if e:match("^(.*)/")==t then
-return true;
-end
-end
-end
-function e:jid_supports(e,t)
-local e=self.disco.cache[e];
-if not e or not e.features then
-return nil,"no-cache";
-end
-return e.features[t]or false;
-end
-function e:get_local_services(a,o)
-local e=self.disco.cache[self.host];
-if not(e)or not(e.items)then
-return nil,"no-cache";
-end
-local t={};
-for i,e in ipairs(e.items)do
-if self:jid_has_identity(e.jid,a,o)then
-table.insert(t,e.jid);
-end
-end
-return t;
-end
-function e:disco_local_services(a)
-self:disco_items(self.host,nil,function(t)
-if not t then
-return a({});
-end
-local e=0;
-local function o()
-e=e-1;
-if e==0 then
-return a(t);
-end
-end
-for a,t in ipairs(t)do
-if t.jid then
-e=e+1;
-self:disco_info(t.jid,nil,o);
-end
-end
-if e==0 then
-return a(t);
-end
-end);
-end
-function e:disco_info(e,t,s)
-local a=a.iq({to=e,type="get"})
-:tag("query",{xmlns=o,node=t});
-self:send_iq(a,function(n)
-if n.attr.type=="error"then
-return s(nil,n:get_error());
-end
-local a,i={},{};
-for e in n:get_child("query",o):childtags()do
-if e.name=="identity"then
-a[e.attr.category.."/"..e.attr.type]=e.attr.name or true;
-elseif e.name=="feature"then
-i[e.attr.var]=true;
-end
-end
-if not self.disco.cache[e]then
-self.disco.cache[e]={nodes={}};
-end
-if t then
-if not self.disco.cache[e].nodes[t]then
-self.disco.cache[e].nodes[t]={nodes={}};
-end
-self.disco.cache[e].nodes[t].identities=a;
-self.disco.cache[e].nodes[t].features=i;
-else
-self.disco.cache[e].identities=a;
-self.disco.cache[e].features=i;
-end
-return s(self.disco.cache[e]);
-end);
-end
-function e:disco_items(t,o,n)
-local a=a.iq({to=t,type="get"})
-:tag("query",{xmlns=i,node=o});
-self:send_iq(a,function(e)
-if e.attr.type=="error"then
-return n(nil,e:get_error());
-end
-local a={};
-for e in e:get_child("query",i):childtags()do
-if e.name=="item"then
-table.insert(a,{
-name=e.attr.name;
-jid=e.attr.jid;
-node=e.attr.node;
-});
-end
-end
-if not self.disco.cache[t]then
-self.disco.cache[t]={nodes={}};
-end
-if o then
-if not self.disco.cache[t].nodes[o]then
-self.disco.cache[t].nodes[o]={nodes={}};
-end
-self.disco.cache[t].nodes[o].items=a;
-else
-self.disco.cache[t].items=a;
-end
-return n(a);
-end);
-end
-e:hook("iq/"..o,function(i)
-local t=i.tags[1];
-if i.attr.type=='get'and t.name=="query"then
-local t=t.attr.node;
-local n=e.disco.info[t or false];
-if t and t==e.caps.node.."#"..e.caps.hash then
-n=e.disco.info[false];
-end
-local n,s=n.identities,n.features
-local t=a.reply(i):tag("query",{
-xmlns=o,
-node=t,
-});
-for a,e in pairs(n)do
-t:tag('identity',e):up()
-end
-for a in pairs(s)do
-t:tag('feature',{var=a}):up()
-end
-e:send(t);
-return true
-end
-end);
-e:hook("iq/"..i,function(o)
-local t=o.tags[1];
-if o.attr.type=='get'and t.name=="query"then
-local n=e.disco.items[t.attr.node or false];
-local t=a.reply(o):tag('query',{
-xmlns=i,
-node=t.attr.node
-})
-for a=1,#n do
-t:tag('item',n[a]):up()
-end
-e:send(t);
-return true
-end
-end);
-local t;
-e:hook("ready",function()
-if t then return;end
-t=true;
-e:disco_local_services(function(t)
-for t,a in ipairs(t)do
-local t=e.disco.cache[a.jid];
-if t then
-for t in pairs(t.identities)do
-local t,o=t:match("^(.*)/(.*)$");
-e:event("disco/service-discovered/"..t,{
-type=o,jid=a.jid;
-});
-end
-end
-end
-e:event("ready");
-end);
-return true;
-end,50);
-e:hook("presence-out",function(t)
-if not t:get_child("c",n)then
-t:reset():add_child(e:caps()):reset();
-end
-end,10);
-end
-end)
-package.preload['verse.plugins.version']=(function(...)
-local o=require"verse";
-local a="jabber:iq:version";
-local function i(t,e)
-t.name=e.name;
-t.version=e.version;
-t.platform=e.platform;
-end
-function o.plugins.version(e)
-e.version={set=i};
-e:hook("iq/"..a,function(t)
-if t.attr.type~="get"then return;end
-local t=o.reply(t)
-:tag("query",{xmlns=a});
-if e.version.name then
-t:tag("name"):text(tostring(e.version.name)):up();
-end
-if e.version.version then
-t:tag("version"):text(tostring(e.version.version)):up()
-end
-if e.version.platform then
-t:tag("os"):text(e.version.platform);
-end
-e:send(t);
-return true;
-end);
-function e:query_version(i,t)
-t=t or function(t)return e:event("version/response",t);end
-e:send_iq(o.iq({type="get",to=i})
-:tag("query",{xmlns=a}),
-function(o)
-if o.attr.type=="result"then
-local e=o:get_child("query",a);
-local o=e and e:get_child_text("name");
-local a=e and e:get_child_text("version");
-local e=e and e:get_child_text("os");
-t({
-name=o;
-version=a;
-platform=e;
-});
-else
-local a,e,o=o:get_error();
-t({
-error=true;
-condition=e;
-text=o;
-type=a;
-});
-end
-end);
-end
-return true;
-end
-end)
-package.preload['verse.plugins.ping']=(function(...)
-local a=require"verse";
-local i="urn:xmpp:ping";
-function a.plugins.ping(e)
-function e:ping(t,o)
-local n=socket.gettime();
-e:send_iq(a.iq{to=t,type="get"}:tag("ping",{xmlns=i}),
-function(e)
-if e.attr.type=="error"then
-local a,e,i=e:get_error();
-if e~="service-unavailable"and e~="feature-not-implemented"then
-o(nil,t,{type=a,condition=e,text=i});
-return;
-end
-end
-o(socket.gettime()-n,t);
-end);
-end
-e:hook("iq/"..i,function(t)
-return e:send(a.reply(t));
-end);
-return true;
-end
-end)
-package.preload['verse.plugins.uptime']=(function(...)
-local o=require"verse";
-local t="jabber:iq:last";
-local function a(t,e)
-t.starttime=e.starttime;
-end
-function o.plugins.uptime(e)
-e.uptime={set=a};
-e:hook("iq/"..t,function(a)
-if a.attr.type~="get"then return;end
-local t=o.reply(a)
-:tag("query",{seconds=tostring(os.difftime(os.time(),e.uptime.starttime)),xmlns=t});
-e:send(t);
-return true;
-end);
-function e:query_uptime(i,a)
-a=a or function(t)return e:event("uptime/response",t);end
-e:send_iq(o.iq({type="get",to=i})
-:tag("query",{xmlns=t}),
-function(e)
-local t=e:get_child("query",t);
-if e.attr.type=="result"then
-local e=tonumber(t.attr.seconds);
-a({
-seconds=e or nil;
-});
-else
-local o,t,e=e:get_error();
-a({
-error=true;
-condition=t;
-text=e;
-type=o;
-});
-end
-end);
-end
-return true;
-end
-end)
-package.preload['verse.plugins.blocking']=(function(...)
-local a=require"verse";
-local o="urn:xmpp:blocking";
-function a.plugins.blocking(e)
-e.blocking={};
-function e.blocking:block_jid(i,t)
-e:send_iq(a.iq{type="set"}
-:tag("block",{xmlns=o})
-:tag("item",{jid=i})
-,function()return t and t(true);end
-,function()return t and t(false);end
-);
-end
-function e.blocking:unblock_jid(i,t)
-e:send_iq(a.iq{type="set"}
-:tag("unblock",{xmlns=o})
-:tag("item",{jid=i})
-,function()return t and t(true);end
-,function()return t and t(false);end
-);
-end
-function e.blocking:unblock_all_jids(t)
-e:send_iq(a.iq{type="set"}
-:tag("unblock",{xmlns=o})
-,function()return t and t(true);end
-,function()return t and t(false);end
-);
-end
-function e.blocking:get_blocked_jids(t)
-e:send_iq(a.iq{type="get"}
-:tag("blocklist",{xmlns=o})
-,function(e)
-local a=e:get_child("blocklist",o);
-if not a then return t and t(false);end
-local e={};
-for t in a:childtags()do
-e[#e+1]=t.attr.jid;
-end
-return t and t(e);
-end
-,function(e)return t and t(false);end
-);
-end
-end
-end)
-package.preload['verse.plugins.jingle']=(function(...)
-local o=require"verse";
-local e=require"util.sha1".sha1;
-local e=require"util.timer";
-local a=require"util.uuid".generate;
-local i="urn:xmpp:jingle:1";
-local h="urn:xmpp:jingle:errors:1";
-local t={};
-t.__index=t;
-local e={};
-local e={};
-function o.plugins.jingle(e)
-e:hook("ready",function()
-e:add_disco_feature(i);
-end,10);
-function e:jingle(i)
-return o.eventable(setmetatable(base or{
-role="initiator";
-peer=i;
-sid=a();
-stream=e;
-},t));
-end
-function e:register_jingle_transport(e)
-end
-function e:register_jingle_content_type(e)
-end
-local function u(n)
-local s=n:get_child("jingle",i);
-local a=s.attr.sid;
-local r=s.attr.action;
-local a=e:event("jingle/"..a,n);
-if a==true then
-e:send(o.reply(n));
-return true;
-end
-if r~="session-initiate"then
-local t=o.error_reply(n,"cancel","item-not-found")
-:tag("unknown-session",{xmlns=h}):up();
-e:send(t);
-return;
-end
-local l=s.attr.sid;
-local a=o.eventable{
-role="receiver";
-peer=n.attr.from;
-sid=l;
-stream=e;
-};
-setmetatable(a,t);
-local d;
-local r,h;
-for t in s:childtags()do
-if t.name=="content"and t.attr.xmlns==i then
-local i=t:child_with_name("description");
-local o=i.attr.xmlns;
-if o then
-local e=e:event("jingle/content/"..o,a,i);
-if e then
-r=e;
-end
-end
-local o=t:child_with_name("transport");
-local i=o.attr.xmlns;
-h=e:event("jingle/transport/"..i,a,o);
-if r and h then
-d=t;
-break;
-end
-end
-end
-if not r then
-e:send(o.error_reply(n,"cancel","feature-not-implemented","The specified content is not supported"));
-return true;
-end
-if not h then
-e:send(o.error_reply(n,"cancel","feature-not-implemented","The specified transport is not supported"));
-return true;
-end
-e:send(o.reply(n));
-a.content_tag=d;
-a.creator,a.name=d.attr.creator,d.attr.name;
-a.content,a.transport=r,h;
-function a:decline()
-end
-e:hook("jingle/"..l,function(e)
-if e.attr.from~=a.peer then
-return false;
-end
-local e=e:get_child("jingle",i);
-return a:handle_command(e);
-end);
-e:event("jingle",a);
-return true;
-end
-function t:handle_command(a)
-local t=a.attr.action;
-e:debug("Handling Jingle command: %s",t);
-if t=="session-terminate"then
-self:destroy();
-elseif t=="session-accept"then
-self:handle_accepted(a);
-elseif t=="transport-info"then
-e:debug("Handling transport-info");
-self.transport:info_received(a);
-elseif t=="transport-replace"then
-e:error("Peer wanted to swap transport, not implemented");
-else
-e:warn("Unhandled Jingle command: %s",t);
-return nil;
-end
-return true;
-end
-function t:send_command(a,t,e)
-local t=o.iq({to=self.peer,type="set"})
-:tag("jingle",{
-xmlns=i,
-sid=self.sid,
-action=a,
-initiator=self.role=="initiator"and self.stream.jid or nil,
-responder=self.role=="responder"and self.jid or nil,
-}):add_child(t);
-if not e then
-self.stream:send(t);
-else
-self.stream:send_iq(t,e);
-end
-end
-function t:accept(t)
-local a=o.iq({to=self.peer,type="set"})
-:tag("jingle",{
-xmlns=i,
-sid=self.sid,
-action="session-accept",
-responder=e.jid,
-})
-:tag("content",{creator=self.creator,name=self.name});
-local o=self.content:generate_accept(self.content_tag:child_with_name("description"),t);
-a:add_child(o);
-local t=self.transport:generate_accept(self.content_tag:child_with_name("transport"),t);
-a:add_child(t);
-local t=self;
-e:send_iq(a,function(a)
-if a.attr.type=="error"then
-local a,t,a=a:get_error();
-e:error("session-accept rejected: %s",t);
-return false;
-end
-t.transport:connect(function(a)
-e:warn("CONNECTED (receiver)!!!");
-t.state="active";
-t:event("connected",a);
-end);
-end);
-end
-e:hook("iq/"..i,u);
-return true;
-end
-function t:offer(t,a)
-local e=o.iq({to=self.peer,type="set"})
-:tag("jingle",{xmlns=i,action="session-initiate",
-initiator=self.stream.jid,sid=self.sid});
-e:tag("content",{creator=self.role,name=t});
-local t=self.stream:event("jingle/describe/"..t,a);
-if not t then
-return false,"Unknown content type";
-end
-e:add_child(t);
-local t=self.stream:event("jingle/transport/".."urn:xmpp:jingle:transports:s5b:1",self);
-self.transport=t;
-e:add_child(t:generate_initiate());
-self.stream:debug("Hooking %s","jingle/"..self.sid);
-self.stream:hook("jingle/"..self.sid,function(e)
-if e.attr.from~=self.peer then
-return false;
-end
-local e=e:get_child("jingle",i);
-return self:handle_command(e)
-end);
-self.stream:send_iq(e,function(e)
-if e.attr.type=="error"then
-self.state="terminated";
-local e,a,t=e:get_error();
-return self:event("error",{type=e,condition=a,text=t});
-end
-end);
-self.state="pending";
-end
-function t:terminate(e)
-local e=o.stanza("reason"):tag(e or"success");
-self:send_command("session-terminate",e,function(e)
-self.state="terminated";
-self.transport:disconnect();
-self:destroy();
-end);
-end
-function t:destroy()
-self:event("terminated");
-self.stream:unhook("jingle/"..self.sid,self.handle_command);
-end
-function t:handle_accepted(e)
-local e=e:child_with_name("transport");
-self.transport:handle_accepted(e);
-self.transport:connect(function(e)
-self.stream:debug("CONNECTED (initiator)!")
-self.state="active";
-self:event("connected",e);
-end);
-end
-function t:set_source(a,o)
-local function t()
-local e,i=a();
-if e and e~=""then
-self.transport.conn:send(e);
-elseif e==""then
-return t();
-elseif e==nil then
-if o then
-self:terminate();
-end
-self.transport.conn:unhook("drained",t);
-a=nil;
-end
-end
-self.transport.conn:hook("drained",t);
-t();
-end
-function t:set_sink(t)
-self.transport.conn:hook("incoming-raw",t);
-self.transport.conn:hook("disconnected",function(e)
-self.stream:debug("Closing sink...");
-local e=e.reason;
-if e=="closed"then e=nil;end
-t(nil,e);
-end);
-end
-end)
-package.preload['verse.plugins.jingle_ft']=(function(...)
-local s=require"verse";
-local n=require"ltn12";
-local h=package.config:sub(1,1);
-local a="urn:xmpp:jingle:apps:file-transfer:1";
-local i="http://jabber.org/protocol/si/profile/file-transfer";
-function s.plugins.jingle_ft(t)
-t:hook("ready",function()
-t:add_disco_feature(a);
-end,10);
-local o={type="file"};
-function o:generate_accept(t,e)
-if e and e.save_file then
-self.jingle:hook("connected",function()
-local e=n.sink.file(io.open(e.save_file,"w+"));
-self.jingle:set_sink(e);
-end);
-end
-return t;
-end
-local o={__index=o};
-t:hook("jingle/content/"..a,function(t,e)
-local e=e:get_child("offer"):get_child("file",i);
-local e={
-name=e.attr.name;
-size=tonumber(e.attr.size);
-};
-return setmetatable({jingle=t,file=e},o);
-end);
-t:hook("jingle/describe/file",function(e)
-local t;
-if e.timestamp then
-t=os.date("!%Y-%m-%dT%H:%M:%SZ",e.timestamp);
-end
-return s.stanza("description",{xmlns=a})
-:tag("offer")
-:tag("file",{xmlns=i,
-name=e.filename,
-size=e.size,
-date=t,
-hash=e.hash,
-})
-:tag("desc"):text(e.description or"");
-end);
-function t:send_file(a,t)
-local e,o=io.open(t);
-if not e then return e,o;end
-local o=e:seek("end",0);
-e:seek("set",0);
-local i=n.source.file(e);
-local e=self:jingle(a);
-e:offer("file",{
-filename=t:match("[^"..h.."]+$");
-size=o;
-});
-e:hook("connected",function()
-e:set_source(i,true);
-end);
-return e;
-end
-end
-end)
-package.preload['verse.plugins.jingle_s5b']=(function(...)
-local a=require"verse";
-local o="urn:xmpp:jingle:transports:s5b:1";
-local r="http://jabber.org/protocol/bytestreams";
-local n=require"util.sha1".sha1;
-local d=require"util.uuid".generate;
-local function h(e,n)
-local function s()
-e:unhook("connected",s);
-return true;
-end
-local function i(t)
-e:unhook("incoming-raw",i);
-if t:sub(1,2)~="\005\000"then
-return e:event("error","connection-failure");
-end
-e:event("connected");
-return true;
-end
-local function a(o)
-e:unhook("incoming-raw",a);
-if o~="\005\000"then
-local t="version-mismatch";
-if o:sub(1,1)=="\005"then
-t="authentication-failure";
-end
-return e:event("error",t);
-end
-e:send(string.char(5,1,0,3,#n)..n.."\0\0");
-e:hook("incoming-raw",i,100);
-return true;
-end
-e:hook("connected",s,200);
-e:hook("incoming-raw",a,100);
-e:send("\005\001\000");
-end
-local function s(o,e,i)
-local e=a.new(nil,{
-streamhosts=e,
-current_host=0;
-});
-local function t(a)
-if a then
-return o(nil,a.reason);
-end
-if e.current_host<#e.streamhosts then
-e.current_host=e.current_host+1;
-e:debug("Attempting to connect to "..e.streamhosts[e.current_host].host..":"..e.streamhosts[e.current_host].port.."...");
-local a,t=e:connect(
-e.streamhosts[e.current_host].host,
-e.streamhosts[e.current_host].port
-);
-if not a then
-e:debug("Error connecting to proxy (%s:%s): %s",
-e.streamhosts[e.current_host].host,
-e.streamhosts[e.current_host].port,
-t
-);
-else
-e:debug("Connecting...");
-end
-h(e,i);
-return true;
-end
-e:unhook("disconnected",t);
-return o(nil);
-end
-e:hook("disconnected",t,100);
-e:hook("connected",function()
-e:unhook("disconnected",t);
-o(e.streamhosts[e.current_host],e);
-end,100);
-t();
-return e;
-end
-function a.plugins.jingle_s5b(e)
-e:hook("ready",function()
-e:add_disco_feature(o);
-end,10);
-local t={};
-function t:generate_initiate()
-self.s5b_sid=d();
-local i=a.stanza("transport",{xmlns=o,
-mode="tcp",sid=self.s5b_sid});
-local t=0;
-for a,o in pairs(e.proxy65.available_streamhosts)do
-t=t+1;
-i:tag("candidate",{jid=a,host=o.host,
-port=o.port,cid=a,priority=t,type="proxy"}):up();
-end
-e:debug("Have %d proxies",t)
-return i;
-end
-function t:generate_accept(e)
-local t={};
-self.s5b_peer_candidates=t;
-self.s5b_mode=e.attr.mode or"tcp";
-self.s5b_sid=e.attr.sid or self.jingle.sid;
-for e in e:childtags()do
-t[e.attr.cid]={
-type=e.attr.type;
-jid=e.attr.jid;
-host=e.attr.host;
-port=tonumber(e.attr.port)or 0;
-priority=tonumber(e.attr.priority)or 0;
-cid=e.attr.cid;
-};
-end
-local e=a.stanza("transport",{xmlns=o});
-return e;
-end
-function t:connect(i)
-e:warn("Connecting!");
-local t={};
-for a,e in pairs(self.s5b_peer_candidates or{})do
-t[#t+1]=e;
-end
-if#t>0 then
-self.connecting_peer_candidates=true;
-local function h(e,t)
-self.jingle:send_command("transport-info",a.stanza("content",{creator=self.creator,name=self.name})
-:tag("transport",{xmlns=o,sid=self.s5b_sid})
-:tag("candidate-used",{cid=e.cid}));
-self.onconnect_callback=i;
-self.conn=t;
-end
-local e=n(self.s5b_sid..self.peer..e.jid,true);
-s(h,t,e);
-else
-e:warn("Actually, I'm going to wait for my peer to tell me its streamhost...");
-self.onconnect_callback=i;
-end
-end
-function t:info_received(t)
-e:warn("Info received");
-local h=t:child_with_name("content");
-local i=h:child_with_name("transport");
-if i:get_child("candidate-used")and not self.connecting_peer_candidates then
-local t=i:child_with_name("candidate-used");
-if t then
-local function d(i,e)
-if self.jingle.role=="initiator"then
-self.jingle.stream:send_iq(a.iq({to=i.jid,type="set"})
-:tag("query",{xmlns=r,sid=self.s5b_sid})
-:tag("activate"):text(self.jingle.peer),function(i)
-if i.attr.type=="result"then
-self.jingle:send_command("transport-info",a.stanza("content",h.attr)
-:tag("transport",{xmlns=o,sid=self.s5b_sid})
-:tag("activated",{cid=t.attr.cid}));
-self.conn=e;
-self.onconnect_callback(e);
-else
-self.jingle.stream:error("Failed to activate bytestream");
-end
-end);
-end
-end
-self.jingle.stream:debug("CID: %s",self.jingle.stream.proxy65.available_streamhosts[t.attr.cid]);
-local t={
-self.jingle.stream.proxy65.available_streamhosts[t.attr.cid];
-};
-local e=n(self.s5b_sid..e.jid..self.peer,true);
-s(d,t,e);
-end
-elseif i:get_child("activated")then
-self.onconnect_callback(self.conn);
-end
-end
-function t:disconnect()
-if self.conn then
-self.conn:close();
-end
-end
-function t:handle_accepted(e)
-end
-local t={__index=t};
-e:hook("jingle/transport/"..o,function(e)
-return setmetatable({
-role=e.role,
-peer=e.peer,
-stream=e.stream,
-jingle=e,
-},t);
-end);
-end
-end)
-package.preload['verse.plugins.proxy65']=(function(...)
-local e=require"util.events";
-local r=require"util.uuid";
-local h=require"util.sha1";
-local i={};
-i.__index=i;
-local o="http://jabber.org/protocol/bytestreams";
-local n;
-function verse.plugins.proxy65(t)
-t.proxy65=setmetatable({stream=t},i);
-t.proxy65.available_streamhosts={};
-local e=0;
-t:hook("disco/service-discovered/proxy",function(a)
-if a.type=="bytestreams"then
-e=e+1;
-t:send_iq(verse.iq({to=a.jid,type="get"})
-:tag("query",{xmlns=o}),function(a)
-e=e-1;
-if a.attr.type=="result"then
-local e=a:get_child("query",o)
-:get_child("streamhost").attr;
-t.proxy65.available_streamhosts[e.jid]={
-jid=e.jid;
-host=e.host;
-port=tonumber(e.port);
-};
-end
-if e==0 then
-t:event("proxy65/discovered-proxies",t.proxy65.available_streamhosts);
-end
-end);
-end
-end);
-t:hook("iq/"..o,function(a)
-local e=verse.new(nil,{
-initiator_jid=a.attr.from,
-streamhosts={},
-current_host=0;
-});
-for t in a.tags[1]:childtags()do
-if t.name=="streamhost"then
-table.insert(e.streamhosts,t.attr);
-end
-end
-local function o()
-if e.current_host<#e.streamhosts then
-e.current_host=e.current_host+1;
-e:connect(
-e.streamhosts[e.current_host].host,
-e.streamhosts[e.current_host].port
-);
-n(t,e,a.tags[1].attr.sid,a.attr.from,t.jid);
-return true;
-end
-e:unhook("disconnected",o);
-t:send(verse.error_reply(a,"cancel","item-not-found"));
-end
-function e:accept()
-e:hook("disconnected",o,100);
-e:hook("connected",function()
-e:unhook("disconnected",o);
-local e=verse.reply(a)
-:tag("query",a.tags[1].attr)
-:tag("streamhost-used",{jid=e.streamhosts[e.current_host].jid});
-t:send(e);
-end,100);
-o();
-end
-function e:refuse()
-end
-t:event("proxy65/request",e);
-end);
-end
-function i:new(t,s)
-local e=verse.new(nil,{
-target_jid=t;
-bytestream_sid=r.generate();
-});
-local a=verse.iq{type="set",to=t}
-:tag("query",{xmlns=o,mode="tcp",sid=e.bytestream_sid});
-for t,e in ipairs(s or self.proxies)do
-a:tag("streamhost",e):up();
-end
-self.stream:send_iq(a,function(a)
-if a.attr.type=="error"then
-local o,a,t=a:get_error();
-e:event("connection-failed",{conn=e,type=o,condition=a,text=t});
-else
-local a=a.tags[1]:get_child("streamhost-used");
-if not a then
-end
-e.streamhost_jid=a.attr.jid;
-local a,i;
-for o,t in ipairs(s or self.proxies)do
-if t.jid==e.streamhost_jid then
-a,i=t.host,t.port;
-break;
-end
-end
-if not(a and i)then
-end
-e:connect(a,i);
-local function a()
-e:unhook("connected",a);
-local t=verse.iq{to=e.streamhost_jid,type="set"}
-:tag("query",{xmlns=o,sid=e.bytestream_sid})
-:tag("activate"):text(t);
-self.stream:send_iq(t,function(t)
-if t.attr.type=="result"then
-e:event("connected",e);
-else
-end
-end);
-return true;
-end
-e:hook("connected",a,100);
-n(self.stream,e,e.bytestream_sid,self.stream.jid,t);
-end
-end);
-return e;
-end
-function n(i,e,o,t,a)
-local i=h.sha1(o..t..a);
-local function o()
-e:unhook("connected",o);
-return true;
-end
-local function a(t)
-e:unhook("incoming-raw",a);
-if t:sub(1,2)~="\005\000"then
-return e:event("error","connection-failure");
-end
-e:event("connected");
-return true;
-end
-local function t(o)
-e:unhook("incoming-raw",t);
-if o~="\005\000"then
-local t="version-mismatch";
-if o:sub(1,1)=="\005"then
-t="authentication-failure";
-end
-return e:event("error",t);
-end
-e:send(string.char(5,1,0,3,#i)..i.."\0\0");
-e:hook("incoming-raw",a,100);
-return true;
-end
-e:hook("connected",o,200);
-e:hook("incoming-raw",t,100);
-e:send("\005\001\000");
-end
-end)
-package.preload['verse.plugins.jingle_ibb']=(function(...)
-local e=require"verse";
-local i=require"util.encodings".base64;
-local s=require"util.uuid".generate;
-local n="urn:xmpp:jingle:transports:ibb:1";
-local o="http://jabber.org/protocol/ibb";
-assert(i.encode("This is a test.")=="VGhpcyBpcyBhIHRlc3Qu","Base64 encoding failed");
-assert(i.decode("VGhpcyBpcyBhIHRlc3Qu")=="This is a test.","Base64 decoding failed");
-local t=table.concat
-local a={};
-local t={__index=a};
-local function h(a)
-local t=setmetatable({stream=a},t)
-t=e.eventable(t);
-return t;
-end
-function a:initiate(a,e,t)
-self.block=2048;
-self.stanza=t or'iq';
-self.peer=a;
-self.sid=e or tostring(self):match("%x+$");
-self.iseq=0;
-self.oseq=0;
-local e=function(e)
-return self:feed(e)
-end
-self.feeder=e;
-print("Hooking incomming IQs");
-local a=self.stream;
-a:hook("iq/"..o,e)
-if t=="message"then
-a:hook("message",e)
-end
-end
-function a:open(t)
-self.stream:send_iq(e.iq{to=self.peer,type="set"}
-:tag("open",{
-xmlns=o,
-["block-size"]=self.block,
-sid=self.sid,
-stanza=self.stanza
-})
-,function(e)
-if t then
-if e.attr.type~="error"then
-t(true)
-else
-t(false,e:get_error())
-end
-end
-end);
-end
-function a:send(n)
-local a=self.stanza;
-local t;
-if a=="iq"then
-t=e.iq{type="set",to=self.peer}
-elseif a=="message"then
-t=e.message{to=self.peer}
-end
-local e=self.oseq;
-self.oseq=e+1;
-t:tag("data",{xmlns=o,sid=self.sid,seq=e})
-:text(i.encode(n));
-if a=="iq"then
-self.stream:send_iq(t,function(e)
-self:event(e.attr.type=="result"and"drained"or"error");
-end)
-else
-stream:send(t)
-self:event("drained");
-end
-end
-function a:feed(t)
-if t.attr.from~=self.peer then return end
-local a=t[1];
-if a.attr.sid~=self.sid then return end
-local n;
-if a.name=="open"then
-self:event("connected");
-self.stream:send(e.reply(t))
-return true
-elseif a.name=="data"then
-local o=t:get_child_text("data",o);
-local a=tonumber(a.attr.seq);
-local n=self.iseq;
-if o and a then
-if a~=n then
-self.stream:send(e.error_reply(t,"cancel","not-acceptable","Wrong sequence. Packet lost?"))
-self:close();
-self:event("error");
-return true;
-end
-self.iseq=a+1;
-local a=i.decode(o);
-if self.stanza=="iq"then
-self.stream:send(e.reply(t))
-end
-self:event("incoming-raw",a);
-return true;
-end
-elseif a.name=="close"then
-self.stream:send(e.reply(t))
-self:close();
-return true
-end
-end
-function a:close()
-self.stream:unhook("iq/"..o,self.feeder)
-self:event("disconnected");
-end
-function e.plugins.jingle_ibb(a)
-a:hook("ready",function()
-a:add_disco_feature(n);
-end,10);
-local t={};
-function t:_setup()
-local e=h(self.stream);
-e.sid=self.sid or e.sid;
-e.stanza=self.stanza or e.stanza;
-e.block=self.block or e.block;
-e:initiate(self.peer,self.sid,self.stanza);
-self.conn=e;
-end
-function t:generate_initiate()
-print("ibb:generate_initiate() as "..self.role);
-local t=s();
-self.sid=t;
-self.stanza='iq';
-self.block=2048;
-local e=e.stanza("transport",{xmlns=n,
-sid=self.sid,stanza=self.stanza,["block-size"]=self.block});
-return e;
-end
-function t:generate_accept(t)
-print("ibb:generate_accept() as "..self.role);
-local e=t.attr;
-self.sid=e.sid or self.sid;
-self.stanza=e.stanza or self.stanza;
-self.block=e["block-size"]or self.block;
-self:_setup();
-return t;
-end
-function t:connect(t)
-if not self.conn then
-self:_setup();
-end
-local e=self.conn;
-print("ibb:connect() as "..self.role);
-if self.role=="initiator"then
-e:open(function(a,...)
-assert(a,table.concat({...},", "));
-t(e);
-end);
-else
-t(e);
-end
-end
-function t:info_received(e)
-print("ibb:info_received()");
-end
-function t:disconnect()
-if self.conn then
-self.conn:close()
-end
-end
-function t:handle_accepted(e)end
-local t={__index=t};
-a:hook("jingle/transport/"..n,function(e)
-return setmetatable({
-role=e.role,
-peer=e.peer,
-stream=e.stream,
-jingle=e,
-},t);
-end);
-end
-end)
-package.preload['verse.plugins.pubsub']=(function(...)
-local h=require"verse";
-local e=require"util.jid".bare;
-local s=table.insert;
-local o="http://jabber.org/protocol/pubsub";
-local n="http://jabber.org/protocol/pubsub#owner";
-local a="http://jabber.org/protocol/pubsub#event";
-local e="http://jabber.org/protocol/pubsub#errors";
-local e={};
-local i={__index=e};
-function h.plugins.pubsub(e)
-e.pubsub=setmetatable({stream=e},i);
-e:hook("message",function(t)
-local o=t.attr.from;
-for t in t:childtags("event",a)do
-local t=t:get_child("items");
-if t then
-local a=t.attr.node;
-for t in t:childtags("item")do
-e:event("pubsub/event",{
-from=o;
-node=a;
-item=t;
-});
-end
-end
-end
-end);
-return true;
-end
-function e:create(a,t,e)
-return self:service(a):node(t):create(nil,e);
-end
-function e:subscribe(a,o,e,t)
-return self:service(a):node(o):subscribe(e,nil,t);
-end
-function e:publish(i,o,e,t,a)
-return self:service(i):node(o):publish(e,nil,t,a);
-end
-local a={};
-local t={__index=a};
-function e:service(e)
-return setmetatable({stream=self.stream,service=e},t)
-end
-local function t(i,t,s,a,r,n,e)
-local t=h.iq{type=i or"get",to=t}
-:tag("pubsub",{xmlns=s or o})
-if a then t:tag(a,{node=r,jid=n});end
-if e then t:tag("item",{id=e~=true and e or nil});end
-return t;
-end
-function a:subscriptions(e)
-self.stream:send_iq(t(nil,self.service,nil,"subscriptions")
-,e and function(t)
-if t.attr.type=="result"then
-local t=t:get_child("pubsub",o);
-local t=t and t:get_child("subscriptions");
-local a={};
-if t then
-for e in t:childtags("subscription")do
-local t=self:node(e.attr.node)
-t.subscription=e;
-t.subscribed_jid=e.attr.jid;
-s(a,t);
-end
-end
-e(a);
-else
-e(false,t:get_error());
-end
-end or nil);
-end
-function a:affiliations(a)
-self.stream:send_iq(t(nil,self.service,nil,"affiliations")
-,a and function(e)
-if e.attr.type=="result"then
-local e=e:get_child("pubsub",o);
-local e=e and e:get_child("affiliations")or{};
-local t={};
-if e then
-for e in e:childtags("affiliation")do
-local a=self:node(e.attr.node)
-a.affiliation=e;
-s(t,a);
-end
-end
-a(t);
-else
-a(false,e:get_error());
-end
-end or nil);
-end
-function a:nodes(a)
-self.stream:disco_items(self.service,nil,function(e,...)
-if e then
-for t=1,#e do
-e[t]=self:node(e[t].node);
-end
-end
-a(e,...)
-end);
-end
-local e={};
-local o={__index=e};
-function a:node(e)
-return setmetatable({stream=self.stream,service=self.service,node=e},o)
-end
-function i:__call(e,t)
-local e=self:service(e);
-return t and e:node(t)or e;
-end
-function e:hook(a,o)
-self._hooks=self._hooks or setmetatable({},{__mode='kv'});
-local function t(e)
-if(not e.service or e.from==self.service)and e.node==self.node then
-return a(e)
-end
-end
-self._hooks[a]=t;
-self.stream:hook("pubsub/event",t,o);
-return t;
-end
-function e:unhook(e)
-if e then
-local e=self._hooks[e];
-self.stream:unhook("pubsub/event",e);
-elseif self._hooks then
-for e in pairs(self._hooks)do
-self.stream:unhook("pubsub/event",e);
-end
-end
-end
-function e:create(a,e)
-if a~=nil then
-error("Not implemented yet.");
-else
-self.stream:send_iq(t("set",self.service,nil,"create",self.node),e);
-end
-end
-function e:configure(e,a)
-if e~=nil then
-error("Not implemented yet.");
-end
-self.stream:send_iq(t("set",self.service,nil,e==nil and"default"or"configure",self.node),a);
-end
-function e:publish(i,o,e,a)
-if o~=nil then
-error("Node configuration is not implemented yet.");
-end
-self.stream:send_iq(t("set",self.service,nil,"publish",self.node,nil,i or true)
-:add_child(e)
-,a);
-end
-function e:subscribe(e,a,o)
-e=e or self.stream.jid;
-if a~=nil then
-error("Subscription configuration is not implemented yet.");
-end
-self.stream:send_iq(t("set",self.service,nil,"subscribe",self.node,e,id)
-,o);
-end
-function e:subscription(e)
-error("Not implemented yet.");
-end
-function e:affiliation(e)
-error("Not implemented yet.");
-end
-function e:unsubscribe(e,a)
-e=e or self.subscribed_jid or self.stream.jid;
-self.stream:send_iq(t("set",self.service,nil,"unsubscribe",self.node,e)
-,a);
-end
-function e:configure_subscription(e,e)
-error("Not implemented yet.");
-end
-function e:items(a,e)
-if a then
-self.stream:send_iq(t("get",self.service,nil,"items",self.node)
-,e);
-else
-self.stream:disco_items(self.service,self.node,e);
-end
-end
-function e:item(a,e)
-self.stream:send_iq(t("get",self.service,nil,"items",self.node,nil,a)
-,e);
-end
-function e:retract(e,a)
-self.stream:send_iq(t("set",self.service,nil,"retract",self.node,nil,e)
-,a);
-end
-function e:purge(a,e)
-assert(not a,"Not implemented yet.");
-self.stream:send_iq(t("set",self.service,n,"purge",self.node)
-,e);
-end
-function e:delete(a,e)
-assert(not a,"Not implemented yet.");
-self.stream:send_iq(t("set",self.service,n,"delete",self.node)
-,e);
-end
-end)
-package.preload['verse.plugins.pep']=(function(...)
-local t=require"verse";
-local e="http://jabber.org/protocol/pubsub";
-local e=e.."#event";
-function t.plugins.pep(e)
-e:add_plugin("disco");
-e:add_plugin("pubsub");
-e.pep={};
-e:hook("pubsub/event",function(t)
-return e:event("pep/"..t.node,{from=t.from,item=t.item.tags[1]});
-end);
-function e:hook_pep(t,o,i)
-local a=e.events._handlers["pep/"..t];
-if not(a)or#a==0 then
-e:add_disco_feature(t.."+notify");
-end
-e:hook("pep/"..t,o,i);
-end
-function e:unhook_pep(t,a)
-e:unhook("pep/"..t,a);
-local a=e.events._handlers["pep/"..t];
-if not(a)or#a==0 then
-e:remove_disco_feature(t.."+notify");
-end
-end
-function e:publish_pep(t,a)
-return e.pubsub:service(nil):node(a or t.attr.xmlns):publish(nil,nil,t)
-end
-end
-end)
-package.preload['verse.plugins.adhoc']=(function(...)
-local o=require"verse";
-local n=require"lib.adhoc";
-local t="http://jabber.org/protocol/commands";
-local s="jabber:x:data";
-local a={};
-a.__index=a;
-local i={};
-function o.plugins.adhoc(e)
-e:add_plugin("disco");
-e:add_disco_feature(t);
-function e:query_commands(a,o)
-e:disco_items(a,t,function(a)
-e:debug("adhoc list returned")
-local t={};
-for o,a in ipairs(a)do
-t[a.node]=a.name;
-end
-e:debug("adhoc calling callback")
-return o(t);
-end);
-end
-function e:execute_command(i,t,o)
-local e=setmetatable({
-stream=e,jid=i,
-command=t,callback=o
-},a);
-return e:execute();
-end
-local function s(t,e)
-if not(e)or e=="user"then return true;end
-if type(e)=="function"then
-return e(t);
-end
-end
-function e:add_adhoc_command(o,a,s,h)
-i[a]=n.new(o,a,s,h);
-e:add_disco_item({jid=e.jid,node=a,name=o},t);
-return i[a];
-end
-local function h(t)
-local a=t.tags[1];
-local a=a.attr.node;
-local a=i[a];
-if not a then return;end
-if not s(t.attr.from,a.permission)then
-e:send(o.error_reply(t,"auth","forbidden","You don't have permission to execute this command"):up()
-:add_child(a:cmdtag("canceled")
-:tag("note",{type="error"}):text("You don't have permission to execute this command")));
-return true
-end
-return n.handle_cmd(a,{send=function(t)return e:send(t)end},t);
-end
-e:hook("iq/"..t,function(e)
-local a=e.attr.type;
-local t=e.tags[1].name;
-if a=="set"and t=="command"then
-return h(e);
-end
-end);
-end
-function a:_process_response(e)
-if e.attr.type=="error"then
-self.status="canceled";
-self.callback(self,{});
-return;
-end
-local e=e:get_child("command",t);
-self.status=e.attr.status;
-self.sessionid=e.attr.sessionid;
-self.form=e:get_child("x",s);
-self.note=e:get_child("note");
-self.callback(self);
-end
-function a:execute()
-local e=o.iq({to=self.jid,type="set"})
-:tag("command",{xmlns=t,node=self.command});
-self.stream:send_iq(e,function(e)
-self:_process_response(e);
-end);
-end
-function a:next(e)
-local t=o.iq({to=self.jid,type="set"})
-:tag("command",{
-xmlns=t,
-node=self.command,
-sessionid=self.sessionid
-});
-if e then t:add_child(e);end
-self.stream:send_iq(t,function(e)
-self:_process_response(e);
-end);
-end
-end)
-package.preload['verse.plugins.presence']=(function(...)
-local a=require"verse";
-function a.plugins.presence(e)
-e.last_presence=nil;
-e:hook("presence-out",function(t)
-if not t.attr.to then
-e.last_presence=t;
-end
-end,1);
-function e:resend_presence()
-if last_presence then
-e:send(last_presence);
-end
-end
-function e:set_status(t)
-local a=a.presence();
-if type(t)=="table"then
-if t.show then
-a:tag("show"):text(t.show):up();
-end
-if t.prio then
-a:tag("priority"):text(tostring(t.prio)):up();
-end
-if t.msg then
-a:tag("status"):text(t.msg):up();
-end
-end
-e:send(a);
-end
-end
-end)
-package.preload['verse.plugins.private']=(function(...)
-local t=require"verse";
-local a="jabber:iq:private";
-function t.plugins.private(o)
-function o:private_set(i,o,e,n)
-local t=t.iq({type="set"})
-:tag("query",{xmlns=a});
-if e then
-if e.name==i and e.attr and e.attr.xmlns==o then
-t:add_child(e);
-else
-t:tag(i,{xmlns=o})
-:add_child(e);
-end
-end
-self:send_iq(t,n);
-end
-function o:private_get(o,i,n)
-self:send_iq(t.iq({type="get"})
-:tag("query",{xmlns=a})
-:tag(o,{xmlns=i}),
-function(e)
-if e.attr.type=="result"then
-local e=e:get_child("query",a);
-local e=e:get_child(o,i);
-n(e);
-end
-end);
-end
-end
-end)
-package.preload['verse.plugins.roster']=(function(...)
-local i=require"verse";
-local r=require"util.jid".bare;
-local a="jabber:iq:roster";
-local n="urn:xmpp:features:rosterver";
-local o=table.insert;
-function i.plugins.roster(t)
-local s=false;
-local e={
-items={};
-ver="";
-};
-t.roster=e;
-t:hook("stream-features",function(e)
-if e:get_child("ver",n)then
-s=true;
-end
-end);
-local function h(t)
-local e=i.stanza("item",{xmlns=a});
-for a,t in pairs(t)do
-if a~="groups"then
-e.attr[a]=t;
-else
-for a=1,#t do
-e:tag("group"):text(t[a]):up();
-end
-end
-end
-return e;
-end
-local function d(t)
-local e={};
-local a={};
-e.groups=a;
-local i=t.attr.jid;
-for t,a in pairs(t.attr)do
-if t~="xmlns"then
-e[t]=a
-end
-end
-for e in t:childtags("group")do
-o(a,e:get_text())
-end
-return e;
-end
-function e:load(t)
-e.ver,e.items=t.ver,t.items;
-end
-function e:dump()
-return{
-ver=e.ver,
-items=e.items,
-};
-end
-function e:add_contact(n,s,o,e)
-local o={jid=n,name=s,groups=o};
-local a=i.iq({type="set"})
-:tag("query",{xmlns=a})
-:add_child(h(o));
-t:send_iq(a,function(t)
-if not e then return end
-if t.attr.type=="result"then
-e(true);
-else
-local t,a,o=t:get_error();
-e(nil,{t,a,o});
-end
-end);
-end
-function e:delete_contact(o,n)
-o=(type(o)=="table"and o.jid)or o;
-local s={jid=o,subscription="remove"}
-if not e.items[o]then return false,"item-not-found";end
-t:send_iq(i.iq({type="set"})
-:tag("query",{xmlns=a})
-:add_child(h(s)),
-function(e)
-if not n then return end
-if e.attr.type=="result"then
-n(true);
-else
-local a,e,t=e:get_error();
-n(nil,{a,e,t});
-end
-end);
-end
-local function h(t)
-local t=d(t);
-e.items[t.jid]=t;
-end
-local function d(t)
-local a=e.items[t];
-e.items[t]=nil;
-return a;
-end
-function e:fetch(o)
-t:send_iq(i.iq({type="get"}):tag("query",{xmlns=a,ver=s and e.ver or nil}),
-function(t)
-if t.attr.type=="result"then
-local t=t:get_child("query",a);
-if t then
-e.items={};
-for t in t:childtags("item")do
-h(t)
-end
-e.ver=t.attr.ver or"";
-end
-o(e);
-else
-local t,e,a=stanza:get_error();
-o(nil,{t,e,a});
-end
-end);
-end
-t:hook("iq/"..a,function(o)
-local s,n=o.attr.type,o.attr.from;
-if s=="set"and(not n or n==r(t.jid))then
-local s=o:get_child("query",a);
-local n=s and s:get_child("item");
-if n then
-local i,a;
-local o=n.attr.jid;
-if n.attr.subscription=="remove"then
-i="removed"
-a=d(o);
-else
-i=e.items[o]and"changed"or"added";
-h(n)
-a=e.items[o];
-end
-e.ver=s.attr.ver;
-if a then
-t:event("roster/item-"..i,a);
-end
-end
-t:send(i.reply(o))
-return true;
-end
-end);
-end
-end)
-package.preload['verse.plugins.register']=(function(...)
-local t=require"verse";
-local i="jabber:iq:register";
-function t.plugins.register(e)
-local function a(o)
-if o:get_child("register","http://jabber.org/features/iq-register")then
-local t=t.iq({to=e.host_,type="set"})
-:tag("query",{xmlns=i})
-:tag("username"):text(e.username):up()
-:tag("password"):text(e.password):up();
-if e.register_email then
-t:tag("email"):text(e.register_email):up();
-end
-e:send_iq(t,function(t)
-if t.attr.type=="result"then
-e:event("registration-success");
-else
-local o,t,a=t:get_error();
-e:debug("Registration failed: %s",t);
-e:event("registration-failure",{type=o,condition=t,text=a});
-end
-end);
-else
-e:debug("In-band registration not offered by server");
-e:event("registration-failure",{condition="service-unavailable"});
-end
-e:unhook("stream-features",a);
-return true;
-end
-e:hook("stream-features",a,310);
-end
-end)
-package.preload['verse.plugins.groupchat']=(function(...)
-local i=require"verse";
-local e=require"events";
-local n=require"util.jid";
-local a={};
-a.__index=a;
-local h="urn:xmpp:delay";
-local s="http://jabber.org/protocol/muc";
-function i.plugins.groupchat(o)
-o:add_plugin("presence")
-o.rooms={};
-o:hook("stanza",function(e)
-local a=n.bare(e.attr.from);
-if not a then return end
-local t=o.rooms[a]
-if not t and e.attr.to and a then
-t=o.rooms[e.attr.to.." "..a]
-end
-if t and t.opts.source and e.attr.to~=t.opts.source then return end
-if t then
-local i=select(3,n.split(e.attr.from));
-local n=e:get_child_text("body");
-local o=e:get_child("delay",h);
-local a={
-room_jid=a;
-room=t;
-sender=t.occupants[i];
-nick=i;
-body=n;
-stanza=e;
-delay=(o and o.attr.stamp);
-};
-local t=t:event(e.name,a);
-return t or(e.name=="message")or nil;
-end
-end,500);
-function o:join_room(n,h,t)
-if not h then
-return false,"no nickname supplied"
-end
-t=t or{};
-local e=setmetatable(i.eventable{
-stream=o,jid=n,nick=h,
-subject=nil,
-occupants={},
-opts=t,
-},a);
-if t.source then
-self.rooms[t.source.." "..n]=e;
-else
-self.rooms[n]=e;
-end
-local a=e.occupants;
-e:hook("presence",function(o)
-local t=o.nick or h;
-if not a[t]and o.stanza.attr.type~="unavailable"then
-a[t]={
-nick=t;
-jid=o.stanza.attr.from;
-presence=o.stanza;
-};
-local o=o.stanza:get_child("x",s.."#user");
-if o then
-local e=o:get_child("item");
-if e and e.attr then
-a[t].real_jid=e.attr.jid;
-a[t].affiliation=e.attr.affiliation;
-a[t].role=e.attr.role;
-end
-end
-if t==e.nick then
-e.stream:event("groupchat/joined",e);
-else
-e:event("occupant-joined",a[t]);
-end
-elseif a[t]and o.stanza.attr.type=="unavailable"then
-if t==e.nick then
-e.stream:event("groupchat/left",e);
-if e.opts.source then
-self.rooms[e.opts.source.." "..n]=nil;
-else
-self.rooms[n]=nil;
-end
-else
-a[t].presence=o.stanza;
-e:event("occupant-left",a[t]);
-a[t]=nil;
-end
-end
-end);
-e:hook("message",function(a)
-local t=a.stanza:get_child_text("subject");
-if not t then return end
-t=#t>0 and t or nil;
-if t~=e.subject then
-local o=e.subject;
-e.subject=t;
-return e:event("subject-changed",{from=o,to=t,by=a.sender,event=a});
-end
-end,2e3);
-local t=i.presence():tag("x",{xmlns=s}):reset();
-self:event("pre-groupchat/joining",t);
-e:send(t)
-self:event("groupchat/joining",e);
-return e;
-end
-o:hook("presence-out",function(e)
-if not e.attr.to then
-for a,t in pairs(o.rooms)do
-t:send(e);
-end
-e.attr.to=nil;
-end
-end);
-end
-function a:send(e)
-if e.name=="message"and not e.attr.type then
-e.attr.type="groupchat";
-end
-if e.name=="presence"then
-e.attr.to=self.jid.."/"..self.nick;
-end
-if e.attr.type=="groupchat"or not e.attr.to then
-e.attr.to=self.jid;
-end
-if self.opts.source then
-e.attr.from=self.opts.source
-end
-self.stream:send(e);
-end
-function a:send_message(e)
-self:send(i.message():tag("body"):text(e));
-end
-function a:set_subject(e)
-self:send(i.message():tag("subject"):text(e));
-end
-function a:leave(t)
-self.stream:event("groupchat/leaving",self);
-local e=i.presence({type="unavailable"});
-if t then
-e:tag("status"):text(t);
-end
-self:send(e);
-end
-function a:admin_set(e,t,a,o)
-self:send(i.iq({type="set"})
-:query(s.."#admin")
-:tag("item",{nick=e,[t]=a})
-:tag("reason"):text(o or""));
-end
-function a:set_role(a,t,e)
-self:admin_set(a,"role",t,e);
-end
-function a:set_affiliation(t,a,e)
-self:admin_set(t,"affiliation",a,e);
-end
-function a:kick(e,t)
-self:set_role(e,"none",t);
-end
-function a:ban(e,t)
-self:set_affiliation(e,"outcast",t);
-end
-end)
-package.preload['verse.plugins.vcard']=(function(...)
-local i=require"verse";
-local o=require"util.vcard";
-local t="vcard-temp";
-function i.plugins.vcard(a)
-function a:get_vcard(n,e)
-a:send_iq(i.iq({to=n,type="get"})
-:tag("vCard",{xmlns=t}),e and function(a)
-local i,i;
-vCard=a:get_child("vCard",t);
-if a.attr.type=="result"and vCard then
-vCard=o.from_xep54(vCard)
-e(vCard)
-else
-e(false)
-end
-end or nil);
-end
-function a:set_vcard(e,n)
-local t;
-if type(e)=="table"and e.name then
-t=e;
-elseif type(e)=="string"then
-t=o.to_xep54(o.from_text(e)[1]);
-elseif type(e)=="table"then
-t=o.to_xep54(e);
-error("Converting a table to vCard not implemented")
-end
-if not t then return false end
-a:debug("setting vcard to %s",tostring(t));
-a:send_iq(i.iq({type="set"})
-:add_child(t),n);
-end
-end
-end)
-package.preload['verse.plugins.vcard_update']=(function(...)
-local n=require"verse";
-local e,i="vcard-temp","vcard-temp:x:update";
-local e,t=pcall(function()return require("util.hashes").sha1;end);
-if not e then
-e,t=pcall(function()return require("util.sha1").sha1;end);
-if not e then
-error("Could not find a sha1()")
-end
-end
-local s=t;
-local e,t=pcall(function()
-local e=require("util.encodings").base64.decode;
-assert(e("SGVsbG8=")=="Hello")
-return e;
-end);
-if not e then
-e,t=pcall(function()return require("mime").unb64;end);
-if not e then
-error("Could not find a base64 decoder")
-end
-end
-local h=t;
-function n.plugins.vcard_update(e)
-e:add_plugin("vcard");
-e:add_plugin("presence");
-local t;
-function update_vcard_photo(o)
-local a;
-for e=1,#o do
-if o[e].name=="PHOTO"then
-a=o[e][1];
-break
-end
-end
-if a then
-local a=s(h(a),true);
-t=n.stanza("x",{xmlns=i})
-:tag("photo"):text(a);
-e:resend_presence()
-else
-t=nil;
-end
-end
-local a=e.set_vcard;
-local a;
-e:hook("ready",function(t)
-if a then return;end
-a=true;
-e:get_vcard(nil,function(t)
-if t then
-update_vcard_photo(t)
-end
-e:event("ready");
-end);
-return true;
-end,3);
-e:hook("presence-out",function(e)
-if t and not e:get_child("x",i)then
-e:add_child(t);
-end
-end,10);
-end
-end)
-package.preload['verse.plugins.carbons']=(function(...)
-local o=require"verse";
-local a="urn:xmpp:carbons:2";
-local r="urn:xmpp:forward:0";
-local s=os.time;
-local h=require"util.datetime".parse;
-local n=require"util.jid".bare;
-function o.plugins.carbons(e)
-local t={};
-t.enabled=false;
-e.carbons=t;
-function t:enable(i)
-e:send_iq(o.iq{type="set"}
-:tag("enable",{xmlns=a})
-,function(e)
-local e=e.attr.type=="result";
-if e then
-t.enabled=true;
-end
-if i then
-i(e);
-end
-end or nil);
-end
-function t:disable(i)
-e:send_iq(o.iq{type="set"}
-:tag("disable",{xmlns=a})
-,function(e)
-local e=e.attr.type=="result";
-if e then
-t.enabled=false;
-end
-if i then
-i(e);
-end
-end or nil);
-end
-local o;
-e:hook("bind-success",function()
-o=n(e.jid);
-end);
-e:hook("message",function(i)
-local t=i:get_child(nil,a);
-if i.attr.from==o and t then
-local o=t.name;
-local t=t:get_child("forwarded",r);
-local a=t and t:get_child("message","jabber:client");
-local t=t:get_child("delay","urn:xmpp:delay");
-local t=t and t.attr.stamp;
-t=t and h(t);
-if a then
-return e:event("carbon",{
-dir=o,
-stanza=a,
-timestamp=t or s(),
-});
-end
-end
-end,1);
-end
-end)
-package.preload['verse.plugins.archive']=(function(...)
-local i=require"verse";
-local a=require"util.stanza";
-local e="urn:xmpp:mam:0"
-local r="urn:xmpp:forward:0";
-local c="urn:xmpp:delay";
-local n=require"util.uuid".generate;
-local m=require"util.datetime".parse;
-local o=require"util.datetime".datetime;
-local t=require"util.dataforms".new;
-local d=require"util.rsm";
-local u={};
-local l=t{
-{name="FORM_TYPE";type="hidden";value=e;};
-{name="with";type="jid-single";};
-{name="start";type="text-single"};
-{name="end";type="text-single";};
-};
-function i.plugins.archive(h)
-function h:query_archive(i,t,h)
-local n=n();
-local s=a.iq{type="set",to=i}
-:tag("query",{xmlns=e,queryid=n});
-local a,i=tonumber(t["start"]),tonumber(t["end"]);
-t["start"]=a and o(a);
-t["end"]=i and o(i);
-s:add_child(l:form(t,"submit"));
-s:add_child(d.generate(t));
-local t={};
-local function i(o)
-local a=o:get_child("fin",e)
-if a and a.attr.queryid==n then
-local e=d.get(a);
-for a,e in pairs(e or u)do t[a]=e;end
-self:unhook("message",i);
-h(t);
-return true
-end
-local e=o:get_child("result",e);
-if e and e.attr.queryid==n then
-local a=e:get_child("forwarded",r);
-a=a or o:get_child("forwarded",r);
-local i=e.attr.id;
-local e=a:get_child("delay",c);
-local o=e and m(e.attr.stamp)or nil;
-local e=a:get_child("message","jabber:client")
-t[#t+1]={id=i,stamp=o,message=e};
-return true
-end
-end
-self:hook("message",i,1);
-self:send_iq(s,function(e)
-if e.attr.type=="error"then
-self:warn(table.concat({e:get_error()}," "))
-self:unhook("message",i);
-h(false,e:get_error())
-end
-return true
-end);
-end
-local i={
-always=true,[true]="always",
-never=false,[false]="never",
-roster="roster",
-}
-local function s(t)
-local e={};
-local a=t.attr.default;
-if a then
-e[false]=i[a];
-end
-local a=t:get_child("always");
-if a then
-for t in a:childtags("jid")do
-local t=t:get_text();
-e[t]=true;
-end
-end
-local t=t:get_child("never");
-if t then
-for t in t:childtags("jid")do
-local t=t:get_text();
-e[t]=false;
-end
-end
-return e;
-end
-local function n(o)
-local t
-t,o[false]=o[false],nil;
-if t~=nil then
-t=i[t];
-end
-local i=a.stanza("prefs",{xmlns=e,default=t})
-local t=a.stanza("always");
-local e=a.stanza("never");
-for a,o in pairs(o)do
-(o and t or e):tag("jid"):text(a):up();
-end
-return i:add_child(t):add_child(e);
-end
-function h:archive_prefs_get(t)
-self:send_iq(a.iq{type="get"}:tag("prefs",{xmlns=e}),
-function(e)
-if e and e.attr.type=="result"and e.tags[1]then
-local a=s(e.tags[1]);
-t(a,e);
-else
-t(nil,e);
-end
-end);
-end
-function h:archive_prefs_set(t,e)
-self:send_iq(a.iq{type="set"}:add_child(n(t)),e);
-end
-end
-end)
-package.preload['net.httpclient_listener']=(function(...)
-local i=require"util.logger".init("httpclient_listener");
-local o,s=table.concat,table.insert;
-local n=require"net.connlisteners".register;
-local a={};
-local e={};
-local t={default_port=80,default_mode="*a"};
-function t.onconnect(t)
-local e=a[t];
-local a={e.method or"GET"," ",e.path," HTTP/1.1\r\n"};
-if e.query then
-s(a,4,"?"..e.query);
-end
-t:write(o(a));
-local a={[2]=": ",[4]="\r\n"};
-for e,i in pairs(e.headers)do
-a[1],a[3]=e,i;
-t:write(o(a));
-end
-t:write("\r\n");
-if e.body then
-t:write(e.body);
-end
-end
-function t.onincoming(o,t)
-local e=a[o];
-if not e then
-i("warn","Received response from connection %s with no request attached!",tostring(o));
-return;
-end
-if t and e.reader then
-e:reader(t);
-end
-end
-function t.ondisconnect(t,e)
-local e=a[t];
-if e and e.conn then
-e:reader(nil);
-end
-a[t]=nil;
-end
-function t.register_request(t,e)
-i("debug","Attaching request %s to connection %s",tostring(e.id or e),tostring(t));
-a[t]=e;
-end
-n("httpclient",t);
-end)
-package.preload['net.connlisteners']=(function(...)
-local l=(CFG_SOURCEDIR or".").."/net/";
-local d=require"net.server";
-local o=require"util.logger".init("connlisteners");
-local s=tostring;
-local u=type
-local r=ipairs
-local h,i,n=
-dofile,xpcall,error
-local c=debug.traceback;
-module"connlisteners"
-local e={};
-function register(t,a)
-if e[t]and e[t]~=a then
-o("debug","Listener %s is already registered, not registering any more",t);
-return false;
-end
-e[t]=a;
-o("debug","Registered connection listener %s",t);
-return true;
-end
-function deregister(t)
-e[t]=nil;
-end
-function get(t)
-local a=e[t];
-if not a then
-local n,i=i(function()h(l..t:gsub("[^%w%-]","_").."_listener.lua")end,c);
-if not n then
-o("error","Error while loading listener '%s': %s",s(t),s(i));
-return nil,i;
-end
-a=e[t];
-end
-return a;
-end
-function start(i,e)
-local t,a=get(i);
-if not t then
-n("No such connection module: "..i..(a and(" ("..a..")")or""),0);
-end
-local o=(e and e.interface)or t.default_interface or"*";
-if u(o)=="string"then o={o};end
-local h=(e and e.port)or t.default_port or n("Can't start listener "..i.." because no port was specified, and it has no default port",0);
-local s=(e and e.mode)or t.default_mode or 1;
-local n=(e and e.ssl)or nil;
-local i=e and e.type=="ssl";
-if i and not n then
-return nil,"no ssl context";
-end
-ok,a=true,{};
-for e,o in r(o)do
-local e
-e,a[o]=d.addserver(o,h,t,s,i and n or nil);
-ok=ok and e;
-end
-return ok,a;
-end
+
+function verse.plugins.archive(stream)
+	function stream:query_archive(where, query_params, callback)
+		local queryid = uuid();
+		local query_st = st.iq{ type="set", to = where }
+			:tag("query", { xmlns = xmlns_mam, queryid = queryid });
+
+		
+		local qstart, qend = tonumber(query_params["start"]), tonumber(query_params["end"]);
+		query_params["start"] = qstart and datetime(qstart);
+		query_params["end"] = qend and datetime(qend);
+
+		query_st:add_child(query_form:form(query_params, "submit"));
+		-- query_st:up();
+		query_st:add_child(rsm.generate(query_params));
+
+		local results = {};
+		local function handle_archived_message(message)
+
+			local finnished = message:get_child("fin", xmlns_mam)
+			if finnished and finnished.attr.queryid == queryid then
+				local rset = rsm.get(finnished);
+				for k,v in pairs(rset or NULL) do results[k]=v; end
+				self:unhook("message", handle_archived_message);
+				callback(results);
+				return true
+			end
+			local result_tag = message:get_child("result", xmlns_mam);
+			if result_tag and result_tag.attr.queryid == queryid then
+				local forwarded = result_tag:get_child("forwarded", xmlns_forward);
+				forwarded = forwarded or message:get_child("forwarded", xmlns_forward); -- COMPAT XEP-0313 pre 2013-05-31
+
+				local id = result_tag.attr.id;
+				local delay = forwarded:get_child("delay", xmlns_delay);
+				local stamp = delay and parse_datetime(delay.attr.stamp) or nil;
+
+				local message = forwarded:get_child("message", "jabber:client")
+
+				results[#results+1] = { id = id, stamp = stamp, message = message };
+				return true
+			end
+		end
+
+		self:hook("message", handle_archived_message, 1);
+		self:send_iq(query_st, function(reply)
+			if reply.attr.type == "error" then
+				self:warn(table.concat({reply:get_error()}, " "))
+				self:unhook("message", handle_archived_message);
+				callback(false, reply:get_error())
+			end
+			return true
+		end);
+	end
+
+	local default_attrs = {
+		always = true, [true] = "always",
+		never = false, [false] = "never",
+		roster = "roster",
+	}
+
+	local function prefs_decode(stanza) -- from XML
+		local prefs = {};
+		local default = stanza.attr.default;
+
+		if default then
+			prefs[false] = default_attrs[default];
+		end
+
+		local always = stanza:get_child("always");
+		if always then
+			for rule in always:childtags("jid") do
+				local jid = rule:get_text();
+				prefs[jid] = true;
+			end
+		end
+
+		local never = stanza:get_child("never");
+		if never then
+			for rule in never:childtags("jid") do
+				local jid = rule:get_text();
+				prefs[jid] = false;
+			end
+		end
+		return prefs;
+	end
+
+	local function prefs_encode(prefs) -- into XML
+		local default
+		default, prefs[false] = prefs[false], nil;
+		if default ~= nil then
+			default = default_attrs[default];
+		end
+		local reply = st.stanza("prefs", { xmlns = xmlns_mam, default = default })
+		local always = st.stanza("always");
+		local never = st.stanza("never");
+		for k,v in pairs(prefs) do
+			(v and always or never):tag("jid"):text(k):up();
+		end
+		return reply:add_child(always):add_child(never);
+	end
+
+	function stream:archive_prefs_get(callback)
+		self:send_iq(st.iq{ type="get" }:tag("prefs", { xmlns = xmlns_mam }),
+		function(result)
+			if result and result.attr.type == "result" and result.tags[1] then
+				local prefs = prefs_decode(result.tags[1]);
+				callback(prefs, result);
+			else
+				callback(nil, result);
+			end
+		end);
+	end
+
+	function stream:archive_prefs_set(prefs, callback)
+		self:send_iq(st.iq{ type="set" }:add_child(prefs_encode(prefs)), callback);
+	end
+end
+ end)
+package.preload['net.httpclient_listener'] = (function (...)
+-- Prosody IM
+-- Copyright (C) 2008-2010 Matthew Wild
+-- Copyright (C) 2008-2010 Waqas Hussain
+-- 
+-- This project is MIT/X11 licensed. Please see the
+-- COPYING file in the source package for more information.
+--
+
+local log = require "util.logger".init("httpclient_listener");
+local t_concat, t_insert = table.concat, table.insert;
+
+local connlisteners_register = require "net.connlisteners".register;
+
+local requests = {}; -- Open requests
+local buffers = {}; -- Buffers of partial lines
+
+local httpclient = { default_port = 80, default_mode = "*a" };
+
+function httpclient.onconnect(conn)
+	local req = requests[conn];
+	-- Send the request
+	local request_line = { req.method or "GET", " ", req.path, " HTTP/1.1\r\n" };
+	if req.query then
+		t_insert(request_line, 4, "?"..req.query);
+	end
+	
+	conn:write(t_concat(request_line));
+	local t = { [2] = ": ", [4] = "\r\n" };
+	for k, v in pairs(req.headers) do
+		t[1], t[3] = k, v;
+		conn:write(t_concat(t));
+	end
+	conn:write("\r\n");
+	
+	if req.body then
+		conn:write(req.body);
+	end
+end
+
+function httpclient.onincoming(conn, data)
+	local request = requests[conn];
+
+	if not request then
+		log("warn", "Received response from connection %s with no request attached!", tostring(conn));
+		return;
+	end
+
+	if data and request.reader then
+		request:reader(data);
+	end
+end
+
+function httpclient.ondisconnect(conn, err)
+	local request = requests[conn];
+	if request and request.conn then
+		request:reader(nil);
+	end
+	requests[conn] = nil;
+end
+
+function httpclient.register_request(conn, req)
+	log("debug", "Attaching request %s to connection %s", tostring(req.id or req), tostring(conn));
+	requests[conn] = req;
+end
+
+connlisteners_register("httpclient", httpclient);
+ end)
+package.preload['net.connlisteners'] = (function (...)
+-- Prosody IM
+-- Copyright (C) 2008-2010 Matthew Wild
+-- Copyright (C) 2008-2010 Waqas Hussain
+-- 
+-- This project is MIT/X11 licensed. Please see the
+-- COPYING file in the source package for more information.
+--
+
+
+
+local listeners_dir = (CFG_SOURCEDIR or ".").."/net/";
+local server = require "net.server";
+local log = require "util.logger".init("connlisteners");
+local tostring = tostring;
+local type = type
+local ipairs = ipairs
+
+local dofile, xpcall, error =
+      dofile, xpcall, error
+
+local debug_traceback = debug.traceback;
+
+module "connlisteners"
+
+local listeners = {};
+
+function register(name, listener)
+	if listeners[name] and listeners[name] ~= listener then
+		log("debug", "Listener %s is already registered, not registering any more", name);
+		return false;
+	end
+	listeners[name] = listener;
+	log("debug", "Registered connection listener %s", name);
+	return true;
+end
+
+function deregister(name)
+	listeners[name] = nil;
+end
+
+function get(name)
+	local h = listeners[name];
+	if not h then
+		local ok, ret = xpcall(function() dofile(listeners_dir..name:gsub("[^%w%-]", "_").."_listener.lua") end, debug_traceback);
+		if not ok then
+			log("error", "Error while loading listener '%s': %s", tostring(name), tostring(ret));
+			return nil, ret;
+		end
+		h = listeners[name];
+	end
+	return h;
+end
+
+function start(name, udata)
+	local h, err = get(name);
+	if not h then
+		error("No such connection module: "..name.. (err and (" ("..err..")") or ""), 0);
+	end
+	
+	local interfaces = (udata and udata.interface) or h.default_interface or "*";
+	if type(interfaces) == "string" then interfaces = {interfaces}; end
+	local port = (udata and udata.port) or h.default_port or error("Can't start listener "..name.." because no port was specified, and it has no default port", 0);
+	local mode = (udata and udata.mode) or h.default_mode or 1;
+	local ssl = (udata and udata.ssl) or nil;
+	local autossl = udata and udata.type == "ssl";
+	
+	if autossl and not ssl then
+		return nil, "no ssl context";
+	end
+
+	ok, err = true, {};
+	for _, interface in ipairs(interfaces) do
+		local handler
+		handler, err[interface] = server.addserver(interface, port, h, mode, autossl and ssl or nil);
+		ok = ok and handler;
+	end
+
+	return ok, err;
+end
+
 return _M;
-end)
-package.preload['util.httpstream']=(function(...)
-local t=coroutine;
-local s=tonumber;
-local d=t.create(function()end);
-t.resume(d);
+ end)
+package.preload['util.httpstream'] = (function (...)
+
+local coroutine = coroutine;
+local tonumber = tonumber;
+
+local deadroutine = coroutine.create(function() end);
+coroutine.resume(deadroutine);
+
 module("httpstream")
-local function c(u,o,d)
-local e=t.yield();
-local function i()
-local a=e:find("\r\n",nil,true);
-while not a do
-e=e..t.yield();
-a=e:find("\r\n",nil,true);
+
+local function parser(success_cb, parser_type, options_cb)
+	local data = coroutine.yield();
+	local function readline()
+		local pos = data:find("\r\n", nil, true);
+		while not pos do
+			data = data..coroutine.yield();
+			pos = data:find("\r\n", nil, true);
+		end
+		local r = data:sub(1, pos-1);
+		data = data:sub(pos+2);
+		return r;
+	end
+	local function readlength(n)
+		while #data < n do
+			data = data..coroutine.yield();
+		end
+		local r = data:sub(1, n);
+		data = data:sub(n + 1);
+		return r;
+	end
+	local function readheaders()
+		local headers = {}; -- read headers
+		while true do
+			local line = readline();
+			if line == "" then break; end -- headers done
+			local key, val = line:match("^([^%s:]+): *(.*)$");
+			if not key then coroutine.yield("invalid-header-line"); end -- TODO handle multi-line and invalid headers
+			key = key:lower();
+			headers[key] = headers[key] and headers[key]..","..val or val;
+		end
+		return headers;
+	end
+	
+	if not parser_type or parser_type == "server" then
+		while true do
+			-- read status line
+			local status_line = readline();
+			local method, path, httpversion = status_line:match("^(%S+)%s+(%S+)%s+HTTP/(%S+)$");
+			if not method then coroutine.yield("invalid-status-line"); end
+			path = path:gsub("^//+", "/"); -- TODO parse url more
+			local headers = readheaders();
+			
+			-- read body
+			local len = tonumber(headers["content-length"]);
+			len = len or 0; -- TODO check for invalid len
+			local body = readlength(len);
+			
+			success_cb({
+				method = method;
+				path = path;
+				httpversion = httpversion;
+				headers = headers;
+				body = body;
+			});
+		end
+	elseif parser_type == "client" then
+		while true do
+			-- read status line
+			local status_line = readline();
+			local httpversion, status_code, reason_phrase = status_line:match("^HTTP/(%S+)%s+(%d%d%d)%s+(.*)$");
+			status_code = tonumber(status_code);
+			if not status_code then coroutine.yield("invalid-status-line"); end
+			local headers = readheaders();
+			
+			-- read body
+			local have_body = not
+				 ( (options_cb and options_cb().method == "HEAD")
+				or (status_code == 204 or status_code == 304 or status_code == 301)
+				or (status_code >= 100 and status_code < 200) );
+			
+			local body;
+			if have_body then
+				local len = tonumber(headers["content-length"]);
+				if headers["transfer-encoding"] == "chunked" then
+					body = "";
+					while true do
+						local chunk_size = readline():match("^%x+");
+						if not chunk_size then coroutine.yield("invalid-chunk-size"); end
+						chunk_size = tonumber(chunk_size, 16)
+						if chunk_size == 0 then break; end
+						body = body..readlength(chunk_size);
+						if readline() ~= "" then coroutine.yield("invalid-chunk-ending"); end
+					end
+					local trailers = readheaders();
+				elseif len then -- TODO check for invalid len
+					body = readlength(len);
+				else -- read to end
+					repeat
+						local newdata = coroutine.yield();
+						data = data..newdata;
+					until newdata == "";
+					body, data = data, "";
+				end
+			end
+			
+			success_cb({
+				code = status_code;
+				httpversion = httpversion;
+				headers = headers;
+				body = body;
+				-- COMPAT the properties below are deprecated
+				responseversion = httpversion;
+				responseheaders = headers;
+			});
+		end
+	else coroutine.yield("unknown-parser-type"); end
 end
-local t=e:sub(1,a-1);
-e=e:sub(a+2);
-return t;
+
+function new(success_cb, error_cb, parser_type, options_cb)
+	local co = coroutine.create(parser);
+	coroutine.resume(co, success_cb, parser_type, options_cb)
+	return {
+		feed = function(self, data)
+			if not data then
+				if parser_type == "client" then coroutine.resume(co, ""); end
+				co = deadroutine;
+				return error_cb();
+			end
+			local success, result = coroutine.resume(co, data);
+			if result then
+				co = deadroutine;
+				return error_cb(result);
+			end
+		end;
+	};
 end
-local function r(a)
-while#e<a do
-e=e..t.yield();
-end
-local t=e:sub(1,a);
-e=e:sub(a+1);
-return t;
-end
-local function h()
-local a={};
-while true do
-local e=i();
-if e==""then break;end
-local e,o=e:match("^([^%s:]+): *(.*)$");
-if not e then t.yield("invalid-header-line");end
-e=e:lower();
-a[e]=a[e]and a[e]..","..o or o;
-end
-return a;
-end
-if not o or o=="server"then
-while true do
-local e=i();
-local o,e,i=e:match("^(%S+)%s+(%S+)%s+HTTP/(%S+)$");
-if not o then t.yield("invalid-status-line");end
-e=e:gsub("^//+","/");
-local a=h();
-local t=s(a["content-length"]);
-t=t or 0;
-local t=r(t);
-u({
-method=o;
-path=e;
-httpversion=i;
-headers=a;
-body=t;
-});
-end
-elseif o=="client"then
-while true do
-local a=i();
-local l,a,o=a:match("^HTTP/(%S+)%s+(%d%d%d)%s+(.*)$");
-a=s(a);
-if not a then t.yield("invalid-status-line");end
-local n=h();
-local d=not
-((d and d().method=="HEAD")
-or(a==204 or a==304 or a==301)
-or(a>=100 and a<200));
-local o;
-if d then
-local a=s(n["content-length"]);
-if n["transfer-encoding"]=="chunked"then
-o="";
-while true do
-local e=i():match("^%x+");
-if not e then t.yield("invalid-chunk-size");end
-e=s(e,16)
-if e==0 then break;end
-o=o..r(e);
-if i()~=""then t.yield("invalid-chunk-ending");end
-end
-local e=h();
-elseif a then
-o=r(a);
-else
-repeat
-local t=t.yield();
-e=e..t;
-until t=="";
-o,e=e,"";
-end
-end
-u({
-code=a;
-httpversion=l;
-headers=n;
-body=o;
-responseversion=l;
-responseheaders=n;
-});
-end
-else t.yield("unknown-parser-type");end
-end
-function new(i,a,o,n)
-local e=t.create(c);
-t.resume(e,i,o,n)
-return{
-feed=function(n,i)
-if not i then
-if o=="client"then t.resume(e,"");end
-e=d;
-return a();
-end
-local o,t=t.resume(e,i);
-if t then
-e=d;
-return a(t);
-end
-end;
-};
-end
+
 return _M;
-end)
-package.preload['net.http']=(function(...)
-local c=require"socket"
-local m=require"mime"
-local f=require"socket.url"
-local s=require"util.httpstream".new;
-local u=require"net.server"
-local e=require"net.connlisteners".get;
-local i=e("httpclient")or error("No httpclient listener!");
-local o,y=table.insert,table.concat;
-local n,w=pairs,ipairs;
-local d,r,v,p,h,a,t=
-tonumber,tostring,xpcall,select,debug.traceback,string.char,string.format;
-local l=require"util.logger".init("http");
-module"http"
-function urlencode(e)return e and(e:gsub("%W",function(e)return t("%%%02x",e:byte());end));end
-function urldecode(e)return e and(e:gsub("%%(%x%x)",function(e)return a(d(e,16));end));end
-local function e(e)
-return e and(e:gsub("%W",function(e)
-if e~=" "then
-return t("%%%02x",e:byte());
-else
-return"+";
+ end)
+package.preload['net.http'] = (function (...)
+-- Prosody IM
+-- Copyright (C) 2008-2010 Matthew Wild
+-- Copyright (C) 2008-2010 Waqas Hussain
+-- 
+-- This project is MIT/X11 licensed. Please see the
+-- COPYING file in the source package for more information.
+--
+
+local socket = require "socket"
+local mime = require "mime"
+local url = require "socket.url"
+local httpstream_new = require "util.httpstream".new;
+
+local server = require "net.server"
+
+local connlisteners_get = require "net.connlisteners".get;
+local listener = connlisteners_get("httpclient") or error("No httpclient listener!");
+
+local t_insert, t_concat = table.insert, table.concat;
+local pairs, ipairs = pairs, ipairs;
+local tonumber, tostring, xpcall, select, debug_traceback, char, format =
+      tonumber, tostring, xpcall, select, debug.traceback, string.char, string.format;
+
+local log = require "util.logger".init("http");
+
+module "http"
+
+function urlencode(s) return s and (s:gsub("%W", function (c) return format("%%%02x", c:byte()); end)); end
+function urldecode(s) return s and (s:gsub("%%(%x%x)", function (c) return char(tonumber(c,16)); end)); end
+
+local function _formencodepart(s)
+	return s and (s:gsub("%W", function (c)
+		if c ~= " " then
+			return format("%%%02x", c:byte());
+		else
+			return "+";
+		end
+	end));
 end
-end));
+
+function formencode(form)
+	local result = {};
+	if form[1] then -- Array of ordered { name, value }
+		for _, field in ipairs(form) do
+			t_insert(result, _formencodepart(field.name).."=".._formencodepart(field.value));
+		end
+	else -- Unordered map of name -> value
+		for name, value in pairs(form) do
+			t_insert(result, _formencodepart(name).."=".._formencodepart(value));
+		end
+	end
+	return t_concat(result, "&");
 end
-function formencode(t)
-local a={};
-if t[1]then
-for i,t in w(t)do
-o(a,e(t.name).."="..e(t.value));
+
+function formdecode(s)
+	if not s:match("=") then return urldecode(s); end
+	local r = {};
+	for k, v in s:gmatch("([^=&]*)=([^&]*)") do
+		k, v = k:gsub("%+", "%%20"), v:gsub("%+", "%%20");
+		k, v = urldecode(k), urldecode(v);
+		t_insert(r, { name = k, value = v });
+		r[k] = v;
+	end
+	return r;
 end
-else
-for t,i in n(t)do
-o(a,e(t).."="..e(i));
+
+local function request_reader(request, data, startpos)
+	if not request.parser then
+		if not data then return; end
+		local function success_cb(r)
+			if request.callback then
+				for k,v in pairs(r) do request[k] = v; end
+				request.callback(r.body, r.code, request, r);
+				request.callback = nil;
+			end
+			destroy_request(request);
+		end
+		local function error_cb(r)
+			if request.callback then
+				request.callback(r or "connection-closed", 0, request);
+				request.callback = nil;
+			end
+			destroy_request(request);
+		end
+		local function options_cb()
+			return request;
+		end
+		request.parser = httpstream_new(success_cb, error_cb, "client", options_cb);
+	end
+	request.parser:feed(data);
 end
+
+local function handleerr(err) log("error", "Traceback[http]: %s: %s", tostring(err), debug_traceback()); end
+function request(u, ex, callback)
+	local req = url.parse(u);
+	
+	if not (req and req.host) then
+		callback(nil, 0, req);
+		return nil, "invalid-url";
+	end
+	
+	if not req.path then
+		req.path = "/";
+	end
+	
+	local method, headers, body;
+	
+	headers = {
+		["Host"] = req.host;
+		["User-Agent"] = "Prosody XMPP Server";
+	};
+	
+	if req.userinfo then
+		headers["Authorization"] = "Basic "..mime.b64(req.userinfo);
+	end
+
+	if ex then
+		req.onlystatus = ex.onlystatus;
+		body = ex.body;
+		if body then
+			method = "POST";
+			headers["Content-Length"] = tostring(#body);
+			headers["Content-Type"] = "application/x-www-form-urlencoded";
+		end
+		if ex.method then method = ex.method; end
+		if ex.headers then
+			for k, v in pairs(ex.headers) do
+				headers[k] = v;
+			end
+		end
+	end
+	
+	-- Attach to request object
+	req.method, req.headers, req.body = method, headers, body;
+	
+	local using_https = req.scheme == "https";
+	local port = tonumber(req.port) or (using_https and 443 or 80);
+	
+	-- Connect the socket, and wrap it with net.server
+	local conn = socket.tcp();
+	conn:settimeout(10);
+	local ok, err = conn:connect(req.host, port);
+	if not ok and err ~= "timeout" then
+		callback(nil, 0, req);
+		return nil, err;
+	end
+	
+	req.handler, req.conn = server.wrapclient(conn, req.host, port, listener, "*a", using_https and { mode = "client", protocol = "sslv23" });
+	req.write = function (...) return req.handler:write(...); end
+	
+	req.callback = function (content, code, request, response) log("debug", "Calling callback, status %s", code or "---"); return select(2, xpcall(function () return callback(content, code, request, response) end, handleerr)); end
+	req.reader = request_reader;
+	req.state = "status";
+
+	listener.register_request(req.handler, req);
+
+	return req;
 end
-return y(a,"&");
+
+function destroy_request(request)
+	if request.conn then
+		request.conn = nil;
+		request.handler:close()
+		listener.ondisconnect(request.handler, "closed");
+	end
 end
-function formdecode(e)
-if not e:match("=")then return urldecode(e);end
-local a={};
-for t,e in e:gmatch("([^=&]*)=([^&]*)")do
-t,e=t:gsub("%+","%%20"),e:gsub("%+","%%20");
-t,e=urldecode(t),urldecode(e);
-o(a,{name=t,value=e});
-a[t]=e;
-end
-return a;
-end
-local function y(e,a,t)
-if not e.parser then
-if not a then return;end
-local function o(t)
-if e.callback then
-for a,t in n(t)do e[a]=t;end
-e.callback(t.body,t.code,e,t);
-e.callback=nil;
-end
-destroy_request(e);
-end
-local function a(t)
-if e.callback then
-e.callback(t or"connection-closed",0,e);
-e.callback=nil;
-end
-destroy_request(e);
-end
-local function t()
-return e;
-end
-e.parser=s(o,a,"client",t);
-end
-e.parser:feed(a);
-end
-local function w(e)l("error","Traceback[http]: %s: %s",r(e),h());end
-function request(e,t,h)
-local e=f.parse(e);
-if not(e and e.host)then
-h(nil,0,e);
-return nil,"invalid-url";
-end
-if not e.path then
-e.path="/";
-end
-local s,a,o;
-a={
-["Host"]=e.host;
-["User-Agent"]="Prosody XMPP Server";
-};
-if e.userinfo then
-a["Authorization"]="Basic "..m.b64(e.userinfo);
-end
-if t then
-e.onlystatus=t.onlystatus;
-o=t.body;
-if o then
-s="POST";
-a["Content-Length"]=r(#o);
-a["Content-Type"]="application/x-www-form-urlencoded";
-end
-if t.method then s=t.method;end
-if t.headers then
-for t,e in n(t.headers)do
-a[t]=e;
-end
-end
-end
-e.method,e.headers,e.body=s,a,o;
-local n=e.scheme=="https";
-local o=d(e.port)or(n and 443 or 80);
-local t=c.tcp();
-t:settimeout(10);
-local s,a=t:connect(e.host,o);
-if not s and a~="timeout"then
-h(nil,0,e);
-return nil,a;
-end
-e.handler,e.conn=u.wrapclient(t,e.host,o,i,"*a",n and{mode="client",protocol="sslv23"});
-e.write=function(...)return e.handler:write(...);end
-e.callback=function(i,t,a,o)l("debug","Calling callback, status %s",t or"---");return p(2,v(function()return h(i,t,a,o)end,w));end
-e.reader=y;
-e.state="status";
-i.register_request(e.handler,e);
-return e;
-end
-function destroy_request(e)
-if e.conn then
-e.conn=nil;
-e.handler:close()
-i.ondisconnect(e.handler,"closed");
-end
-end
-_M.urlencode=urlencode;
+
+_M.urlencode = urlencode;
+
 return _M;
-end)
-package.preload['verse.bosh']=(function(...)
-local r=require"util.xmppstream".new;
-local h=require"util.stanza";
-require"net.httpclient_listener";
-local o=require"net.http";
-local e=setmetatable({},{__index=verse.stream_mt});
-e.__index=e;
-local s="http://etherx.jabber.org/streams";
-local n="http://jabber.org/protocol/httpbind";
-local i=5;
-function verse.new_bosh(a,t)
-local t={
-bosh_conn_pool={};
-bosh_waiting_requests={};
-bosh_rid=math.random(1,999999);
-bosh_outgoing_buffer={};
-bosh_url=t;
-conn={};
+ end)
+package.preload['verse.bosh'] = (function (...)
+
+local new_xmpp_stream = require "util.xmppstream".new;
+local st = require "util.stanza";
+require "net.httpclient_listener"; -- Required for net.http to work
+local http = require "net.http";
+
+local stream_mt = setmetatable({}, { __index = verse.stream_mt });
+stream_mt.__index = stream_mt;
+
+local xmlns_stream = "http://etherx.jabber.org/streams";
+local xmlns_bosh = "http://jabber.org/protocol/httpbind";
+
+local reconnect_timeout = 5;
+
+function verse.new_bosh(logger, url)
+	local stream = {
+		bosh_conn_pool = {};
+		bosh_waiting_requests = {};
+		bosh_rid = math.random(1,999999);
+		bosh_outgoing_buffer = {};
+		bosh_url = url;
+		conn = {};
+	};
+	function stream:reopen()
+		self.bosh_need_restart = true;
+		self:flush();
+	end
+	local conn = verse.new(logger, stream);
+	return setmetatable(conn, stream_mt);
+end
+
+function stream_mt:connect()
+	self:_send_session_request();
+end
+
+function stream_mt:send(data)
+	self:debug("Putting into BOSH send buffer: %s", tostring(data));
+	self.bosh_outgoing_buffer[#self.bosh_outgoing_buffer+1] = st.clone(data);
+	self:flush(); --TODO: Optimize by doing this on next tick (give a chance for data to buffer)
+end
+
+function stream_mt:flush()
+	if self.connected
+	and #self.bosh_waiting_requests < self.bosh_max_requests
+	and (#self.bosh_waiting_requests == 0
+		or #self.bosh_outgoing_buffer > 0
+		or self.bosh_need_restart) then
+		self:debug("Flushing...");
+		local payload = self:_make_body();
+		local buffer = self.bosh_outgoing_buffer;
+		for i, stanza in ipairs(buffer) do
+			payload:add_child(stanza);
+			buffer[i] = nil;
+		end
+		self:_make_request(payload);
+	else
+		self:debug("Decided not to flush.");
+	end
+end
+
+function stream_mt:_make_request(payload)
+	local request, err = http.request(self.bosh_url, { body = tostring(payload) }, function (response, code, request)
+		if code ~= 0 then
+			self.inactive_since = nil;
+			return self:_handle_response(response, code, request);
+		end
+		
+		-- Connection issues, we need to retry this request
+		local time = os.time();
+		if not self.inactive_since then
+			self.inactive_since = time; -- So we know when it is time to give up
+		elseif time - self.inactive_since > self.bosh_max_inactivity then
+			return self:_disconnected();
+		else
+			self:debug("%d seconds left to reconnect, retrying in %d seconds...", 
+				self.bosh_max_inactivity - (time - self.inactive_since), reconnect_timeout);
+		end
+		
+		-- Set up reconnect timer
+		timer.add_task(reconnect_timeout, function ()
+			self:debug("Retrying request...");
+			-- Remove old request
+			for i, waiting_request in ipairs(self.bosh_waiting_requests) do
+				if waiting_request == request then
+					table.remove(self.bosh_waiting_requests, i);
+					break;
+				end
+			end
+			self:_make_request(payload);
+		end);
+	end);
+	if request then
+		table.insert(self.bosh_waiting_requests, request);
+	else
+		self:warn("Request failed instantly: %s", err);
+	end
+end
+
+function stream_mt:_disconnected()
+	self.connected = nil;
+	self:event("disconnected");
+end
+
+function stream_mt:_send_session_request()
+	local body = self:_make_body();
+	
+	-- XEP-0124
+	body.attr.hold = "1";
+	body.attr.wait = "60";
+	body.attr["xml:lang"] = "en";
+	body.attr.ver = "1.6";
+
+	-- XEP-0206
+	body.attr.from = self.jid;
+	body.attr.to = self.host;
+	body.attr.secure = 'true';
+	
+	http.request(self.bosh_url, { body = tostring(body) }, function (response, code)
+		if code == 0 then
+			-- Failed to connect
+			return self:_disconnected();
+		end
+		-- Handle session creation response
+		local payload = self:_parse_response(response)
+		if not payload then
+			self:warn("Invalid session creation response");
+			self:_disconnected();
+			return;
+		end
+		self.bosh_sid = payload.attr.sid; -- Session id
+		self.bosh_wait = tonumber(payload.attr.wait); -- How long the server may hold connections for
+		self.bosh_hold = tonumber(payload.attr.hold); -- How many connections the server may hold
+		self.bosh_max_inactivity = tonumber(payload.attr.inactivity); -- Max amount of time with no connections
+		self.bosh_max_requests = tonumber(payload.attr.requests) or self.bosh_hold; -- Max simultaneous requests we can make
+		self.connected = true;
+		self:event("connected");
+		self:_handle_response_payload(payload);
+	end);
+end
+
+function stream_mt:_handle_response(response, code, request)
+	if self.bosh_waiting_requests[1] ~= request then
+		self:warn("Server replied to request that wasn't the oldest");
+		for i, waiting_request in ipairs(self.bosh_waiting_requests) do
+			if waiting_request == request then
+				self.bosh_waiting_requests[i] = nil;
+				break;
+			end
+		end
+	else
+		table.remove(self.bosh_waiting_requests, 1);
+	end
+	local payload = self:_parse_response(response);
+	if payload then
+		self:_handle_response_payload(payload);
+	end
+	self:flush();
+end
+
+function stream_mt:_handle_response_payload(payload)
+	local stanzas = payload.tags;
+	for i = 1, #stanzas do
+		local stanza = stanzas[i];
+		if stanza.attr.xmlns == xmlns_stream then
+			self:event("stream-"..stanza.name, stanza);
+		elseif stanza.attr.xmlns then
+			self:event("stream/"..stanza.attr.xmlns, stanza);
+		else
+			self:event("stanza", stanza);
+		end
+	end
+	if payload.attr.type == "terminate" then
+		self:_disconnected({reason = payload.attr.condition});
+	end
+end
+
+local stream_callbacks = {
+	stream_ns = "http://jabber.org/protocol/httpbind", stream_tag = "body",
+	default_ns = "jabber:client",
+	streamopened = function (session, attr) session.notopen = nil; session.payload = verse.stanza("body", attr); return true; end;
+	handlestanza = function (session, stanza) session.payload:add_child(stanza); end;
 };
-function t:reopen()
-self.bosh_need_restart=true;
-self:flush();
-end
-local t=verse.new(a,t);
-return setmetatable(t,e);
-end
-function e:connect()
-self:_send_session_request();
-end
-function e:send(e)
-self:debug("Putting into BOSH send buffer: %s",tostring(e));
-self.bosh_outgoing_buffer[#self.bosh_outgoing_buffer+1]=h.clone(e);
-self:flush();
-end
-function e:flush()
-if self.connected
-and#self.bosh_waiting_requests<self.bosh_max_requests
-and(#self.bosh_waiting_requests==0
-or#self.bosh_outgoing_buffer>0
-or self.bosh_need_restart)then
-self:debug("Flushing...");
-local e=self:_make_body();
-local t=self.bosh_outgoing_buffer;
-for a,o in ipairs(t)do
-e:add_child(o);
-t[a]=nil;
-end
-self:_make_request(e);
-else
-self:debug("Decided not to flush.");
-end
-end
-function e:_make_request(a)
-local e,t=o.request(self.bosh_url,{body=tostring(a)},function(o,e,t)
-if e~=0 then
-self.inactive_since=nil;
-return self:_handle_response(o,e,t);
-end
-local e=os.time();
-if not self.inactive_since then
-self.inactive_since=e;
-elseif e-self.inactive_since>self.bosh_max_inactivity then
-return self:_disconnected();
-else
-self:debug("%d seconds left to reconnect, retrying in %d seconds...",
-self.bosh_max_inactivity-(e-self.inactive_since),i);
-end
-timer.add_task(i,function()
-self:debug("Retrying request...");
-for e,a in ipairs(self.bosh_waiting_requests)do
-if a==t then
-table.remove(self.bosh_waiting_requests,e);
-break;
-end
-end
-self:_make_request(a);
-end);
-end);
-if e then
-table.insert(self.bosh_waiting_requests,e);
-else
-self:warn("Request failed instantly: %s",t);
-end
-end
-function e:_disconnected()
-self.connected=nil;
-self:event("disconnected");
-end
-function e:_send_session_request()
-local e=self:_make_body();
-e.attr.hold="1";
-e.attr.wait="60";
-e.attr["xml:lang"]="en";
-e.attr.ver="1.6";
-e.attr.from=self.jid;
-e.attr.to=self.host;
-e.attr.secure='true';
-o.request(self.bosh_url,{body=tostring(e)},function(e,t)
-if t==0 then
-return self:_disconnected();
-end
-local e=self:_parse_response(e)
-if not e then
-self:warn("Invalid session creation response");
-self:_disconnected();
-return;
-end
-self.bosh_sid=e.attr.sid;
-self.bosh_wait=tonumber(e.attr.wait);
-self.bosh_hold=tonumber(e.attr.hold);
-self.bosh_max_inactivity=tonumber(e.attr.inactivity);
-self.bosh_max_requests=tonumber(e.attr.requests)or self.bosh_hold;
-self.connected=true;
-self:event("connected");
-self:_handle_response_payload(e);
-end);
-end
-function e:_handle_response(a,t,e)
-if self.bosh_waiting_requests[1]~=e then
-self:warn("Server replied to request that wasn't the oldest");
-for t,a in ipairs(self.bosh_waiting_requests)do
-if a==e then
-self.bosh_waiting_requests[t]=nil;
-break;
-end
-end
-else
-table.remove(self.bosh_waiting_requests,1);
-end
-local e=self:_parse_response(a);
-if e then
-self:_handle_response_payload(e);
-end
-self:flush();
-end
-function e:_handle_response_payload(t)
-local e=t.tags;
-for t=1,#e do
-local e=e[t];
-if e.attr.xmlns==s then
-self:event("stream-"..e.name,e);
-elseif e.attr.xmlns then
-self:event("stream/"..e.attr.xmlns,e);
-else
-self:event("stanza",e);
-end
-end
-if t.attr.type=="terminate"then
-self:_disconnected({reason=t.attr.condition});
-end
-end
-local a={
-stream_ns="http://jabber.org/protocol/httpbind",stream_tag="body",
-default_ns="jabber:client",
-streamopened=function(e,t)e.notopen=nil;e.payload=verse.stanza("body",t);return true;end;
-handlestanza=function(t,e)t.payload:add_child(e);end;
-};
-function e:_parse_response(e)
-self:debug("Parsing response: %s",e);
-if e==nil then
-self:debug("%s",debug.traceback());
-self:_disconnected();
-return;
-end
-local t={notopen=true,stream=self};
-local a=r(t,a);
-a:feed(e);
-return t.payload;
-end
-function e:_make_body()
-self.bosh_rid=self.bosh_rid+1;
-local e=verse.stanza("body",{
-xmlns=n;
-content="text/xml; charset=utf-8";
-sid=self.bosh_sid;
-rid=self.bosh_rid;
-});
-if self.bosh_need_restart then
-self.bosh_need_restart=nil;
-e.attr.restart='true';
-end
-return e;
-end
-end)
-package.preload['verse.client']=(function(...)
-local t=require"verse";
-local o=t.stream_mt;
-local s=require"util.jid".split;
-local h=require"net.adns";
-local e=require"lxp";
-local a=require"util.stanza";
-t.message,t.presence,t.iq,t.stanza,t.reply,t.error_reply=
-a.message,a.presence,a.iq,a.stanza,a.reply,a.error_reply;
-local r=require"util.xmppstream".new;
-local n="http://etherx.jabber.org/streams";
-local function d(t,e)
-return t.priority<e.priority or(t.priority==e.priority and t.weight>e.weight);
-end
-local i={
-stream_ns=n,
-stream_tag="stream",
-default_ns="jabber:client"};
-function i.streamopened(e,t)
-e.stream_id=t.id;
-if not e:event("opened",t)then
-e.notopen=nil;
-end
-return true;
-end
-function i.streamclosed(e)
-e.notopen=true;
-if not e.closed then
-e:send("</stream:stream>");
-e.closed=true;
-end
-e:event("closed");
-return e:close("stream closed")
-end
-function i.handlestanza(t,e)
-if e.attr.xmlns==n then
-return t:event("stream-"..e.name,e);
-elseif e.attr.xmlns then
-return t:event("stream/"..e.attr.xmlns,e);
-end
-return t:event("stanza",e);
-end
-function i.error(a,t,e)
-if a:event(t,e)==nil then
-local t=e:get_child(nil,"urn:ietf:params:xml:ns:xmpp-streams");
-local e=e:get_child_text("text","urn:ietf:params:xml:ns:xmpp-streams");
-error(t.name..(e and": "..e or""));
-end
-end
-function o:reset()
-if self.stream then
-self.stream:reset();
-else
-self.stream=r(self,i);
-end
-self.notopen=true;
-return true;
-end
-function o:connect_client(e,a)
-self.jid,self.password=e,a;
-self.username,self.host,self.resource=s(e);
-self:add_plugin("tls");
-self:add_plugin("sasl");
-self:add_plugin("bind");
-self:add_plugin("session");
-function self.data(t,e)
-local t,a=self.stream:feed(e);
-if t then return;end
-self:debug("debug","Received invalid XML (%s) %d bytes: %s",tostring(a),#e,e:sub(1,300):gsub("[\r\n]+"," "));
-self:close("xml-not-well-formed");
-end
-self:hook("connected",function()self:reopen();end);
-self:hook("incoming-raw",function(e)return self.data(self.conn,e);end);
-self.curr_id=0;
-self.tracked_iqs={};
-self:hook("stanza",function(t)
-local e,a=t.attr.id,t.attr.type;
-if e and t.name=="iq"and(a=="result"or a=="error")and self.tracked_iqs[e]then
-self.tracked_iqs[e](t);
-self.tracked_iqs[e]=nil;
-return true;
-end
-end);
-self:hook("stanza",function(e)
-local a;
-if e.attr.xmlns==nil or e.attr.xmlns=="jabber:client"then
-if e.name=="iq"and(e.attr.type=="get"or e.attr.type=="set")then
-local o=e.tags[1]and e.tags[1].attr.xmlns;
-if o then
-a=self:event("iq/"..o,e);
-if not a then
-a=self:event("iq",e);
-end
-end
-if a==nil then
-self:send(t.error_reply(e,"cancel","service-unavailable"));
-return true;
-end
-else
-a=self:event(e.name,e);
-end
-end
-return a;
-end,-1);
-self:hook("outgoing",function(e)
-if e.name then
-self:event("stanza-out",e);
-end
-end);
-self:hook("stanza-out",function(e)
-if not e.attr.xmlns then
-self:event(e.name.."-out",e);
-end
-end);
-local function e()
-self:event("ready");
-end
-self:hook("session-success",e,-1)
-self:hook("bind-success",e,-1);
-local t=self.close;
-function self:close(e)
-self.close=t;
-if not self.closed then
-self:send("</stream:stream>");
-self.closed=true;
-else
-return self:close(e);
-end
-end
-local function t()
-self:connect(self.connect_host or self.host,self.connect_port or 5222);
-end
-if not(self.connect_host or self.connect_port)then
-h.lookup(function(a)
-if a then
-local e={};
-self.srv_hosts=e;
-for a,t in ipairs(a)do
-table.insert(e,t.srv);
-end
-table.sort(e,d);
-local a=e[1];
-self.srv_choice=1;
-if a then
-self.connect_host,self.connect_port=a.target,a.port;
-self:debug("Best record found, will connect to %s:%d",self.connect_host or self.host,self.connect_port or 5222);
-end
-self:hook("disconnected",function()
-if self.srv_hosts and self.srv_choice<#self.srv_hosts then
-self.srv_choice=self.srv_choice+1;
-local e=e[self.srv_choice];
-self.connect_host,self.connect_port=e.target,e.port;
-t();
-return true;
-end
-end,1e3);
-self:hook("connected",function()
-self.srv_hosts=nil;
-end,1e3);
-end
-t();
-end,"_xmpp-client._tcp."..(self.host)..".","SRV");
-else
-t();
-end
-end
-function o:reopen()
-self:reset();
-self:send(a.stanza("stream:stream",{to=self.host,["xmlns:stream"]='http://etherx.jabber.org/streams',
-xmlns="jabber:client",version="1.0"}):top_tag());
-end
-function o:send_iq(e,a)
-local t=self:new_id();
-self.tracked_iqs[t]=a;
-e.attr.id=t;
-self:send(e);
-end
-function o:new_id()
-self.curr_id=self.curr_id+1;
-return tostring(self.curr_id);
-end
-end)
-package.preload['verse.component']=(function(...)
-local a=require"verse";
-local o=a.stream_mt;
-local h=require"util.jid".split;
-local e=require"lxp";
-local t=require"util.stanza";
-local r=require"util.sha1".sha1;
-a.message,a.presence,a.iq,a.stanza,a.reply,a.error_reply=
-t.message,t.presence,t.iq,t.stanza,t.reply,t.error_reply;
-local d=require"util.xmppstream".new;
-local s="http://etherx.jabber.org/streams";
-local i="jabber:component:accept";
-local n={
-stream_ns=s,
-stream_tag="stream",
-default_ns=i};
-function n.streamopened(e,t)
-e.stream_id=t.id;
-if not e:event("opened",t)then
-e.notopen=nil;
-end
-return true;
-end
-function n.streamclosed(e)
-return e:event("closed");
-end
-function n.handlestanza(t,e)
-if e.attr.xmlns==s then
-return t:event("stream-"..e.name,e);
-elseif e.attr.xmlns or e.name=="handshake"then
-return t:event("stream/"..(e.attr.xmlns or i),e);
-end
-return t:event("stanza",e);
-end
-function o:reset()
-if self.stream then
-self.stream:reset();
-else
-self.stream=d(self,n);
-end
-self.notopen=true;
-return true;
-end
-function o:connect_component(e,n)
-self.jid,self.password=e,n;
-self.username,self.host,self.resource=h(e);
-function self.data(t,e)
-local a,t=self.stream:feed(e);
-if a then return;end
-o:debug("debug","Received invalid XML (%s) %d bytes: %s",tostring(t),#e,e:sub(1,300):gsub("[\r\n]+"," "));
-o:close("xml-not-well-formed");
-end
-self:hook("incoming-raw",function(e)return self.data(self.conn,e);end);
-self.curr_id=0;
-self.tracked_iqs={};
-self:hook("stanza",function(e)
-local t,a=e.attr.id,e.attr.type;
-if t and e.name=="iq"and(a=="result"or a=="error")and self.tracked_iqs[t]then
-self.tracked_iqs[t](e);
-self.tracked_iqs[t]=nil;
-return true;
-end
-end);
-self:hook("stanza",function(e)
-local t;
-if e.attr.xmlns==nil or e.attr.xmlns=="jabber:client"then
-if e.name=="iq"and(e.attr.type=="get"or e.attr.type=="set")then
-local o=e.tags[1]and e.tags[1].attr.xmlns;
-if o then
-t=self:event("iq/"..o,e);
-if not t then
-t=self:event("iq",e);
-end
-end
-if t==nil then
-self:send(a.error_reply(e,"cancel","service-unavailable"));
-return true;
-end
-else
-t=self:event(e.name,e);
-end
-end
-return t;
-end,-1);
-self:hook("opened",function(e)
-print(self.jid,self.stream_id,e.id);
-local e=r(self.stream_id..n,true);
-self:send(t.stanza("handshake",{xmlns=i}):text(e));
-self:hook("stream/"..i,function(e)
-if e.name=="handshake"then
-self:event("authentication-success");
-end
-end);
-end);
-local function e()
-self:event("ready");
-end
-self:hook("authentication-success",e,-1);
-self:connect(self.connect_host or self.host,self.connect_port or 5347);
-self:reopen();
-end
-function o:reopen()
-self:reset();
-self:send(t.stanza("stream:stream",{to=self.jid,["xmlns:stream"]='http://etherx.jabber.org/streams',
-xmlns=i,version="1.0"}):top_tag());
-end
-function o:close(e)
-if not self.notopen then
-self:send("</stream:stream>");
-end
-local t=self.conn.disconnect();
-self.conn:close();
-t(conn,e);
-end
-function o:send_iq(e,a)
-local t=self:new_id();
-self.tracked_iqs[t]=a;
-e.attr.id=t;
-self:send(e);
-end
-function o:new_id()
-self.curr_id=self.curr_id+1;
-return tostring(self.curr_id);
-end
-end)
-pcall(require,"luarocks.require");
-pcall(require,"ssl");
-local a=require"net.server";
-local n=require"util.events";
-local o=require"util.logger";
-module("verse",package.seeall);
-local e=_M;
-_M.server=a;
-local t={};
-t.__index=t;
-stream_mt=t;
-e.plugins={};
-function e.init(...)
-for e=1,select("#",...)do
-local t=pcall(require,"verse."..select(e,...));
-if not t then
-error("Verse connection module not found: verse."..select(e,...));
-end
-end
-return e;
-end
-local i=0;
-function e.new(o,a)
-local t=setmetatable(a or{},t);
-i=i+1;
-t.id=tostring(i);
-t.logger=o or e.new_logger("stream"..t.id);
-t.events=n.new();
-t.plugins={};
-t.verse=e;
-return t;
-end
-e.add_task=require"util.timer".add_task;
-e.logger=o.init;
-e.new_logger=o.init;
-e.log=e.logger("verse");
-local function i(a,...)
-local e,t,o=0,{...},select('#',...);
-return(a:gsub("%%(.)",function(a)if e<=o then e=e+1;return tostring(t[e]);end end));
-end
-function e.set_log_handler(e,t)
-t=t or{"debug","info","warn","error"};
-o.reset();
-if io.type(e)=="file"then
-local a=e;
-function e(t,e,o)
-a:write(t,"\t",e,"\t",o,"\n");
-end
-end
-if e then
-local function n(a,o,t,...)
-return e(a,o,i(t,...));
-end
-for t,e in ipairs(t)do
-o.add_level_sink(e,n);
-end
-end
-end
-function _default_log_handler(a,o,t)
-return io.stderr:write(a,"\t",o,"\t",t,"\n");
-end
-e.set_log_handler(_default_log_handler,{"error"});
-local function o(t)
-e.log("error","Error: %s",t);
-e.log("error","Traceback: %s",debug.traceback());
-end
-function e.set_error_handler(e)
-o=e;
-end
-function e.loop()
-return xpcall(a.loop,o);
-end
-function e.step()
-return xpcall(a.step,o);
-end
-function e.quit()
-return a.setquitting(true);
-end
-function t:listen(e,t)
-e=e or"localhost";
-t=t or 0;
-local a,o=a.addserver(e,t,new_listener(self,"server"),"*a");
-if a then
-self:debug("Bound to %s:%s",e,t);
-self.server=a;
-end
-return a,o;
-end
-function t:connect(t,o)
-t=t or"localhost";
-o=tonumber(o)or 5222;
-local i=socket.tcp()
-i:settimeout(0);
-local n,e=i:connect(t,o);
-if not n and e~="timeout"then
-self:warn("connect() to %s:%d failed: %s",t,o,e);
-return self:event("disconnected",{reason=e})or false,e;
-end
-local t=a.wrapclient(i,t,o,new_listener(self),"*a");
-if not t then
-self:warn("connection initialisation failed: %s",e);
-return self:event("disconnected",{reason=e})or false,e;
-end
-self:set_conn(t);
-return true;
-end
-function t:set_conn(t)
-self.conn=t;
-self.send=function(a,e)
-self:event("outgoing",e);
-e=tostring(e);
-self:event("outgoing-raw",e);
-return t:write(e);
-end;
-end
-function t:close(t)
-if not self.conn then
-e.log("error","Attempt to close disconnected connection - possibly a bug");
-return;
-end
-local e=self.conn.disconnect();
-self.conn:close();
-e(self.conn,t);
-end
-function t:debug(...)
-return self.logger("debug",...);
-end
-function t:info(...)
-return self.logger("info",...);
-end
-function t:warn(...)
-return self.logger("warn",...);
-end
-function t:error(...)
-return self.logger("error",...);
-end
-function t:event(e,...)
-self:debug("Firing event: "..tostring(e));
-return self.events.fire_event(e,...);
-end
-function t:hook(e,...)
-return self.events.add_handler(e,...);
-end
-function t:unhook(t,e)
-return self.events.remove_handler(t,e);
-end
-function e.eventable(e)
-e.events=n.new();
-e.hook,e.unhook=t.hook,t.unhook;
-local t=e.events.fire_event;
-function e:event(e,...)
-return t(e,...);
-end
-return e;
-end
-function t:add_plugin(t)
-if self.plugins[t]then return true;end
-if require("verse.plugins."..t)then
-local a,e=e.plugins[t](self);
-if a~=false then
-self:debug("Loaded %s plugin",t);
-self.plugins[t]=true;
-else
-self:warn("Failed to load %s plugin: %s",t,e);
-end
-end
-return self;
-end
-function new_listener(t)
-local a={};
-function a.onconnect(a)
-if t.server then
-local e=e.new();
-a:setlistener(new_listener(e));
-e:set_conn(a);
-t:event("connected",{client=e});
-else
-t.connected=true;
-t:event("connected");
-end
-end
-function a.onincoming(a,e)
-t:event("incoming-raw",e);
-end
-function a.ondisconnect(e,a)
-if e~=t.conn then return end
-t.connected=false;
-t:event("disconnected",{reason=a});
-end
-function a.ondrain(e)
-t:event("drained");
-end
-function a.onstatus(a,e)
-t:event("status",e);
-end
-return a;
-end
-return e;
+function stream_mt:_parse_response(response)
+	self:debug("Parsing response: %s", response);
+	if response == nil then
+		self:debug("%s", debug.traceback());
+		self:_disconnected();
+		return;
+	end
+	local session = { notopen = true, stream = self };
+	local stream = new_xmpp_stream(session, stream_callbacks);
+	stream:feed(response);
+	return session.payload;
+end
+
+function stream_mt:_make_body()
+	self.bosh_rid = self.bosh_rid + 1;
+	local body = verse.stanza("body", {
+		xmlns = xmlns_bosh;
+		content = "text/xml; charset=utf-8";
+		sid = self.bosh_sid;
+		rid = self.bosh_rid;
+	});
+	if self.bosh_need_restart then
+		self.bosh_need_restart = nil;
+		body.attr.restart = 'true';
+	end
+	return body;
+end
+ end)
+package.preload['verse.client'] = (function (...)
+local verse = require "verse";
+local stream = verse.stream_mt;
+
+local jid_split = require "util.jid".split;
+local adns = require "net.adns";
+local lxp = require "lxp";
+local st = require "util.stanza";
+
+-- Shortcuts to save having to load util.stanza
+verse.message, verse.presence, verse.iq, verse.stanza, verse.reply, verse.error_reply =
+	st.message, st.presence, st.iq, st.stanza, st.reply, st.error_reply;
+
+local new_xmpp_stream = require "util.xmppstream".new;
+
+local xmlns_stream = "http://etherx.jabber.org/streams";
+
+local function compare_srv_priorities(a,b)
+	return a.priority < b.priority or (a.priority == b.priority and a.weight > b.weight);
+end
+
+local stream_callbacks = {
+	stream_ns = xmlns_stream,
+	stream_tag = "stream",
+	 default_ns = "jabber:client" };
+	
+function stream_callbacks.streamopened(stream, attr)
+	stream.stream_id = attr.id;
+	if not stream:event("opened", attr) then
+		stream.notopen = nil;
+	end
+	return true;
+end
+
+function stream_callbacks.streamclosed(stream)
+	stream.notopen = true;
+	if not stream.closed then
+		stream:send("</stream:stream>");
+		stream.closed = true;
+	end
+	stream:event("closed");
+	return stream:close("stream closed")
+end
+
+function stream_callbacks.handlestanza(stream, stanza)
+	if stanza.attr.xmlns == xmlns_stream then
+		return stream:event("stream-"..stanza.name, stanza);
+	elseif stanza.attr.xmlns then
+		return stream:event("stream/"..stanza.attr.xmlns, stanza);
+	end
+
+	return stream:event("stanza", stanza);
+end
+
+function stream_callbacks.error(stream, e, stanza)
+	if stream:event(e, stanza) == nil then
+		local err = stanza:get_child(nil, "urn:ietf:params:xml:ns:xmpp-streams");
+		local text = stanza:get_child_text("text", "urn:ietf:params:xml:ns:xmpp-streams");
+		error(err.name..(text and ": "..text or ""));
+	end
+end
+
+function stream:reset()
+	if self.stream then
+		self.stream:reset();
+	else
+		self.stream = new_xmpp_stream(self, stream_callbacks);
+	end
+	self.notopen = true;
+	return true;
+end
+
+function stream:connect_client(jid, pass)
+	self.jid, self.password = jid, pass;
+	self.username, self.host, self.resource = jid_split(jid);
+	
+	-- Required XMPP features
+	self:add_plugin("tls");
+	self:add_plugin("sasl");
+	self:add_plugin("bind");
+	self:add_plugin("session");
+	
+	function self.data(conn, data)
+		local ok, err = self.stream:feed(data);
+		if ok then return; end
+		self:debug("debug", "Received invalid XML (%s) %d bytes: %s", tostring(err), #data, data:sub(1, 300):gsub("[\r\n]+", " "));
+		self:close("xml-not-well-formed");
+	end
+	
+	self:hook("connected", function () self:reopen(); end);
+	self:hook("incoming-raw", function (data) return self.data(self.conn, data); end);
+	
+	self.curr_id = 0;
+	
+	self.tracked_iqs = {};
+	self:hook("stanza", function (stanza)
+		local id, type = stanza.attr.id, stanza.attr.type;
+		if id and stanza.name == "iq" and (type == "result" or type == "error") and self.tracked_iqs[id] then
+			self.tracked_iqs[id](stanza);
+			self.tracked_iqs[id] = nil;
+			return true;
+		end
+	end);
+	
+	self:hook("stanza", function (stanza)
+		local ret;
+		if stanza.attr.xmlns == nil or stanza.attr.xmlns == "jabber:client" then
+			if stanza.name == "iq" and (stanza.attr.type == "get" or stanza.attr.type == "set") then
+				local xmlns = stanza.tags[1] and stanza.tags[1].attr.xmlns;
+				if xmlns then
+					ret = self:event("iq/"..xmlns, stanza);
+					if not ret then
+						ret = self:event("iq", stanza);
+					end
+				end
+				if ret == nil then
+					self:send(verse.error_reply(stanza, "cancel", "service-unavailable"));
+					return true;
+				end
+			else
+				ret = self:event(stanza.name, stanza);
+			end
+		end
+		return ret;
+	end, -1);
+
+	self:hook("outgoing", function (data)
+		if data.name then
+			self:event("stanza-out", data);
+		end
+	end);
+	
+	self:hook("stanza-out", function (stanza)
+		if not stanza.attr.xmlns then
+			self:event(stanza.name.."-out", stanza);
+		end
+	end);
+	
+	local function stream_ready()
+		self:event("ready");
+	end
+	self:hook("session-success", stream_ready, -1)
+	self:hook("bind-success", stream_ready, -1);
+
+	local _base_close = self.close;
+	function self:close(reason)
+		self.close = _base_close;
+		if not self.closed then
+			self:send("</stream:stream>");
+			self.closed = true;
+		else
+			return self:close(reason);
+		end
+	end
+	
+	local function start_connect()
+		-- Initialise connection
+		self:connect(self.connect_host or self.host, self.connect_port or 5222);
+	end
+	
+	if not (self.connect_host or self.connect_port) then
+		-- Look up SRV records
+		adns.lookup(function (answer)
+			if answer then
+				local srv_hosts = {};
+				self.srv_hosts = srv_hosts;
+				for _, record in ipairs(answer) do
+					table.insert(srv_hosts, record.srv);
+				end
+				table.sort(srv_hosts, compare_srv_priorities);
+				
+				local srv_choice = srv_hosts[1];
+				self.srv_choice = 1;
+				if srv_choice then
+					self.connect_host, self.connect_port = srv_choice.target, srv_choice.port;
+					self:debug("Best record found, will connect to %s:%d", self.connect_host or self.host, self.connect_port or 5222);
+				end
+				
+				self:hook("disconnected", function ()
+					if self.srv_hosts and self.srv_choice < #self.srv_hosts then
+						self.srv_choice = self.srv_choice + 1;
+						local srv_choice = srv_hosts[self.srv_choice];
+						self.connect_host, self.connect_port = srv_choice.target, srv_choice.port;
+						start_connect();
+						return true;
+					end
+				end, 1000);
+				
+				self:hook("connected", function ()
+					self.srv_hosts = nil;
+				end, 1000);
+			end
+			start_connect();
+		end, "_xmpp-client._tcp."..(self.host)..".", "SRV");
+	else
+		start_connect();
+	end
+end
+
+function stream:reopen()
+	self:reset();
+	self:send(st.stanza("stream:stream", { to = self.host, ["xmlns:stream"]='http://etherx.jabber.org/streams',
+		xmlns = "jabber:client", version = "1.0" }):top_tag());
+end
+
+function stream:send_iq(iq, callback)
+	local id = self:new_id();
+	self.tracked_iqs[id] = callback;
+	iq.attr.id = id;
+	self:send(iq);
+end
+
+function stream:new_id()
+	self.curr_id = self.curr_id + 1;
+	return tostring(self.curr_id);
+end
+ end)
+package.preload['verse.component'] = (function (...)
+local verse = require "verse";
+local stream = verse.stream_mt;
+
+local jid_split = require "util.jid".split;
+local lxp = require "lxp";
+local st = require "util.stanza";
+local sha1 = require "util.sha1".sha1;
+
+-- Shortcuts to save having to load util.stanza
+verse.message, verse.presence, verse.iq, verse.stanza, verse.reply, verse.error_reply =
+	st.message, st.presence, st.iq, st.stanza, st.reply, st.error_reply;
+
+local new_xmpp_stream = require "util.xmppstream".new;
+
+local xmlns_stream = "http://etherx.jabber.org/streams";
+local xmlns_component = "jabber:component:accept";
+
+local stream_callbacks = {
+	stream_ns = xmlns_stream,
+	stream_tag = "stream",
+	 default_ns = xmlns_component };
+	
+function stream_callbacks.streamopened(stream, attr)
+	stream.stream_id = attr.id;
+	if not stream:event("opened", attr) then
+		stream.notopen = nil;
+	end
+	return true;
+end
+
+function stream_callbacks.streamclosed(stream)
+	return stream:event("closed");
+end
+
+function stream_callbacks.handlestanza(stream, stanza)
+	if stanza.attr.xmlns == xmlns_stream then
+		return stream:event("stream-"..stanza.name, stanza);
+	elseif stanza.attr.xmlns or stanza.name == "handshake" then
+		return stream:event("stream/"..(stanza.attr.xmlns or xmlns_component), stanza);
+	end
+
+	return stream:event("stanza", stanza);
+end
+
+function stream:reset()
+	if self.stream then
+		self.stream:reset();
+	else
+		self.stream = new_xmpp_stream(self, stream_callbacks);
+	end
+	self.notopen = true;
+	return true;
+end
+
+function stream:connect_component(jid, pass)
+	self.jid, self.password = jid, pass;
+	self.username, self.host, self.resource = jid_split(jid);
+	
+	function self.data(conn, data)
+		local ok, err = self.stream:feed(data);
+		if ok then return; end
+		stream:debug("debug", "Received invalid XML (%s) %d bytes: %s", tostring(err), #data, data:sub(1, 300):gsub("[\r\n]+", " "));
+		stream:close("xml-not-well-formed");
+	end
+	
+	self:hook("incoming-raw", function (data) return self.data(self.conn, data); end);
+	
+	self.curr_id = 0;
+	
+	self.tracked_iqs = {};
+	self:hook("stanza", function (stanza)
+		local id, type = stanza.attr.id, stanza.attr.type;
+		if id and stanza.name == "iq" and (type == "result" or type == "error") and self.tracked_iqs[id] then
+			self.tracked_iqs[id](stanza);
+			self.tracked_iqs[id] = nil;
+			return true;
+		end
+	end);
+	
+	self:hook("stanza", function (stanza)
+		local ret;
+		if stanza.attr.xmlns == nil or stanza.attr.xmlns == "jabber:client" then
+			if stanza.name == "iq" and (stanza.attr.type == "get" or stanza.attr.type == "set") then
+				local xmlns = stanza.tags[1] and stanza.tags[1].attr.xmlns;
+				if xmlns then
+					ret = self:event("iq/"..xmlns, stanza);
+					if not ret then
+						ret = self:event("iq", stanza);
+					end
+				end
+				if ret == nil then
+					self:send(verse.error_reply(stanza, "cancel", "service-unavailable"));
+					return true;
+				end
+			else
+				ret = self:event(stanza.name, stanza);
+			end
+		end
+		return ret;
+	end, -1);
+
+	self:hook("opened", function (attr)
+		print(self.jid, self.stream_id, attr.id);
+		local token = sha1(self.stream_id..pass, true);
+
+		self:send(st.stanza("handshake", { xmlns = xmlns_component }):text(token));
+		self:hook("stream/"..xmlns_component, function (stanza)
+			if stanza.name == "handshake" then
+				self:event("authentication-success");
+			end
+		end);
+	end);
+
+	local function stream_ready()
+		self:event("ready");
+	end
+	self:hook("authentication-success", stream_ready, -1);
+
+	-- Initialise connection
+	self:connect(self.connect_host or self.host, self.connect_port or 5347);
+	self:reopen();
+end
+
+function stream:reopen()
+	self:reset();
+	self:send(st.stanza("stream:stream", { to = self.jid, ["xmlns:stream"]='http://etherx.jabber.org/streams',
+		xmlns = xmlns_component, version = "1.0" }):top_tag());
+end
+
+function stream:close(reason)
+	if not self.notopen then
+		self:send("</stream:stream>");
+	end
+	local on_disconnect = self.conn.disconnect();
+	self.conn:close();
+	on_disconnect(conn, reason);
+end
+
+function stream:send_iq(iq, callback)
+	local id = self:new_id();
+	self.tracked_iqs[id] = callback;
+	iq.attr.id = id;
+	self:send(iq);
+end
+
+function stream:new_id()
+	self.curr_id = self.curr_id + 1;
+	return tostring(self.curr_id);
+end
+ end)
+
+-- Use LuaRocks if available
+pcall(require, "luarocks.require");
+
+-- Load LuaSec if available
+pcall(require, "ssl");
+
+local server = require "net.server";
+local events = require "util.events";
+local logger = require "util.logger";
+
+module("verse", package.seeall);
+local verse = _M;
+_M.server = server;
+
+local stream = {};
+stream.__index = stream;
+stream_mt = stream;
+
+verse.plugins = {};
+
+function verse.init(...)
+	for i=1,select("#", ...) do
+		local ok = pcall(require, "verse."..select(i,...));
+		if not ok then
+			error("Verse connection module not found: verse."..select(i,...));
+		end
+	end
+	return verse;
+end
+
+
+local max_id = 0;
+
+function verse.new(logger, base)
+	local t = setmetatable(base or {}, stream);
+	max_id = max_id + 1;
+	t.id = tostring(max_id);
+	t.logger = logger or verse.new_logger("stream"..t.id);
+	t.events = events.new();
+	t.plugins = {};
+	t.verse = verse;
+	return t;
+end
+
+verse.add_task = require "util.timer".add_task;
+
+verse.logger = logger.init; -- COMPAT: Deprecated
+verse.new_logger = logger.init;
+verse.log = verse.logger("verse");
+
+local function format(format, ...)
+	local n, arg, maxn = 0, { ... }, select('#', ...);
+	return (format:gsub("%%(.)", function (c) if n <= maxn then n = n + 1; return tostring(arg[n]); end end));
+end
+
+function verse.set_log_handler(log_handler, levels)
+	levels = levels or { "debug", "info", "warn", "error" };
+	logger.reset();
+	if io.type(log_handler) == "file" then
+		local f = log_handler;
+		function log_handler(name, level, message)
+			f:write(name, "\t", level, "\t", message, "\n");
+		end
+	end
+	if log_handler then
+		local function _log_handler(name, level, message, ...)
+			return log_handler(name, level, format(message, ...));
+		end
+		for i, level in ipairs(levels) do
+			logger.add_level_sink(level, _log_handler);
+		end
+	end
+end
+
+function _default_log_handler(name, level, message)
+	return io.stderr:write(name, "\t", level, "\t", message, "\n");
+end
+verse.set_log_handler(_default_log_handler, { "error" });
+
+local function error_handler(err)
+	verse.log("error", "Error: %s", err);
+	verse.log("error", "Traceback: %s", debug.traceback());
+end
+
+function verse.set_error_handler(new_error_handler)
+	error_handler = new_error_handler;
+end
+
+function verse.loop()
+	return xpcall(server.loop, error_handler);
+end
+
+function verse.step()
+	return xpcall(server.step, error_handler);
+end
+
+function verse.quit()
+	return server.setquitting(true);
+end
+
+function stream:listen(host, port)
+	host = host or "localhost";
+	port = port or 0;
+	local conn, err = server.addserver(host, port, new_listener(self, "server"), "*a");
+	if conn then
+		self:debug("Bound to %s:%s", host, port);
+		self.server = conn;
+	end
+	return conn, err;
+end
+
+function stream:connect(connect_host, connect_port)
+	connect_host = connect_host or "localhost";
+	connect_port = tonumber(connect_port) or 5222;
+	
+	-- Create and initiate connection
+	local conn = socket.tcp()
+	conn:settimeout(0);
+	local success, err = conn:connect(connect_host, connect_port);
+	
+	if not success and err ~= "timeout" then
+		self:warn("connect() to %s:%d failed: %s", connect_host, connect_port, err);
+		return self:event("disconnected", { reason = err }) or false, err;
+	end
+
+	local conn = server.wrapclient(conn, connect_host, connect_port, new_listener(self), "*a");
+	if not conn then
+		self:warn("connection initialisation failed: %s", err);
+		return self:event("disconnected", { reason = err }) or false, err;
+	end
+	self:set_conn(conn);
+	return true;
+end
+
+function stream:set_conn(conn)
+	self.conn = conn;
+	self.send = function (stream, data)
+		self:event("outgoing", data);
+		data = tostring(data);
+		self:event("outgoing-raw", data);
+		return conn:write(data);
+	end;
+end
+
+function stream:close(reason)
+	if not self.conn then 
+		verse.log("error", "Attempt to close disconnected connection - possibly a bug");
+		return;
+	end
+	local on_disconnect = self.conn.disconnect();
+	self.conn:close();
+	on_disconnect(self.conn, reason);
+end
+
+-- Logging functions
+function stream:debug(...)
+	return self.logger("debug", ...);
+end
+
+function stream:info(...)
+	return self.logger("info", ...);
+end
+
+function stream:warn(...)
+	return self.logger("warn", ...);
+end
+
+function stream:error(...)
+	return self.logger("error", ...);
+end
+
+-- Event handling
+function stream:event(name, ...)
+	self:debug("Firing event: "..tostring(name));
+	return self.events.fire_event(name, ...);
+end
+
+function stream:hook(name, ...)
+	return self.events.add_handler(name, ...);
+end
+
+function stream:unhook(name, handler)
+	return self.events.remove_handler(name, handler);
+end
+
+function verse.eventable(object)
+        object.events = events.new();
+        object.hook, object.unhook = stream.hook, stream.unhook;
+        local fire_event = object.events.fire_event;
+        function object:event(name, ...)
+                return fire_event(name, ...);
+        end
+        return object;
+end
+
+function stream:add_plugin(name)
+	if self.plugins[name] then return true; end
+	if require("verse.plugins."..name) then
+		local ok, err = verse.plugins[name](self);
+		if ok ~= false then
+			self:debug("Loaded %s plugin", name);
+			self.plugins[name] = true;
+		else
+			self:warn("Failed to load %s plugin: %s", name, err);
+		end
+	end
+	return self;
+end
+
+-- Listener factory
+function new_listener(stream)
+	local conn_listener = {};
+	
+	function conn_listener.onconnect(conn)
+		if stream.server then
+			local client = verse.new();
+			conn:setlistener(new_listener(client));
+			client:set_conn(conn);
+			stream:event("connected", { client = client });
+		else
+			stream.connected = true;
+			stream:event("connected");
+		end
+	end
+	
+	function conn_listener.onincoming(conn, data)
+		stream:event("incoming-raw", data);
+	end
+	
+	function conn_listener.ondisconnect(conn, err)
+		if conn ~= stream.conn then return end
+		stream.connected = false;
+		stream:event("disconnected", { reason = err });
+	end
+
+	function conn_listener.ondrain(conn)
+		stream:event("drained");
+	end
+	
+	function conn_listener.onstatus(conn, new_status)
+		stream:event("status", new_status);
+	end
+	
+	return conn_listener;
+end
+
+return verse;

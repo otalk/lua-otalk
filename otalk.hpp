@@ -12,8 +12,10 @@ class OTalk {
         lua::State state;
 		std::string jid;
 		OTalk();
-        std::function<lua::Value(std::string, std::string)> connect;
-        std::function<lua::Value(std::string, std::function<void(lua::Value)>)> hook;
-        std::function<lua::Value(std::string, lua::Value)> event;
+        void connect(std::string, std::string);
+        //std::function<lua::Value(std::string, std::function<void(lua::Value)>)> hook;
+        void hook(std::string, std::function<void(lua::Value)>);
+        void event(std::string, lua::Value);
+        lua::Value joinRoom(std::string, std::string);
 };
 #endif
