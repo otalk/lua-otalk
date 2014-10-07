@@ -2,9 +2,9 @@
 # ###################################################################
 #
 LIBS=-llua -ldl
-CXXFLAGS=-g -Wall -Wno-deprecated
+CXXFLAGS=-g -Wall -Wno-deprecated -std=c++11
 EXECUTABLE=wrapping-test
-SOURCES=wrapping-test.cpp
+SOURCES=otalk.cpp wrapping-test.cpp
 OBJDIR=./
 
 # ###################################################################
