@@ -5,6 +5,13 @@
 OTalk::OTalk() {
     state.doFile("./wrapper.lua");
     verse = state["c"];
+    emit = state["emit"];
+}
+
+void OTalk::connect(std::string jid) {
+    jid = jid;
+    //connecting anonymously
+    state["connect"](jid);
 }
 
 void OTalk::connect(std::string jid, std::string password) {
@@ -17,13 +24,33 @@ lua::Value OTalk::joinRoom(std::string rjid, std::string nick) {
     return state["joinRoom"](rjid, nick);
 }
 
-void OTalk::hook(std::string name, std::function<void(lua::Value)> callback) {
-    state["hook"](name, callback);
+void OTalk::on(std::string name, std::function<void(lua::Value)> callback) {
+    state["on"](name, callback);
 }
 
-void OTalk::event(std::string name, lua::Value args) {
-    state["event"](name, args);
+/*
+void OTalk::emit(std::string name, lua::Value args) {
+    state["emit"](name, args);
+}
+*/
+
+void OTalk::leaveRoom(std::string room) {
+    state["leaveRoom"](room);
 }
 
+lua::Value OTalk::getRooms() {
+    return state["getRooms"]();
+}
 
+lua::Value OTalk::getParticipants(std::string room) {
+    return state["getParticipants"](room);
+}
+
+void OTalk::startPeer(std::string sdp, std::string target) {
+    state["startPeer"](sdp, target);
+}
+
+void OTalk::endPeer(std::string session) {
+    state["endPeer"](session);
+}
 
