@@ -67,77 +67,53 @@ end
 function Jingle:process(action, req)
     print("processing?");
     if ACTIONS[action] then
-        print("1");
-        return self[ACTIONS[action]](self, req);
+        if not self[ACTIONS[action]] then
+            print("We don't have one of those!");
+            self.client:send(req:error_reply('modify', 'feature-not-implemented'));
+            return true;
+        else
+            return self[ACTIONS[action]](self, req);
+        end
     else
-        print("nope");
+        print("Invalid action.");
+        self.client:send(req:error_reply('cancel', 'bad-request'));
+        return true;
     end
-    print("happened?");
 end
 
 function Jingle:check(state)
-    if states[state] then
-        return self[states[state]];
+    if STATES[state] then
+        return self[STATES[state]];
     end
+    print("State not found.");
     return false;
 end
 
-function Jingle:onContentAccept(req)
-    print("onContentAccept works!");
-    print(self);
-    print(req);
-end
 
 function Jingle:onContentAdd(req)
 end
 
-function Jingle:onContentModify(req)
-end
-
-function Jingle:onConnectReject(req)
-end
-
-function Jingle:onContentRemove(req)
-end
-
 function Jingle:onDescriptionInfo(req)
-end
-
-function Jingle:onSecurityInfo(req)
-end
-
-function Jingle:onSessionAccept(req)
-end
-
-function Jingle:onSessionInitiate(req)
-end
-
-function Jingle:onSessionTerminate(req)
-end
-
-function Jingle:onTransportAccept(req)
+            self.client:send(
+                req:error_reply('modify', 'feature-notimplemented')
+                    :tag("out-of-order", {xmlns = xmlns_jingle_error})
+                    :up()
+            );
 end
 
 function Jingle:onTransportInfo(req)
 end
 
-function Jingle:onTransportReject(req)
+function Jingle:onSessionInfo(req)
+end
+
+function Jingle:onSessionAccept(req)
 end
 
 function Jingle:onTransportReplace(req)
 end
 
-function Jingle:onSourceAdd(req)
+function Jingle:endSession(reason)
 end
 
-function Jingle:onSourceRemove(req)
-end
-
-function Jingle:close(reason)
-end
-
-print("new jingle");
-local x = Jingle:new();
-print("processing");
-x:process('content-accept', 'derp');
-
+return Jingle;

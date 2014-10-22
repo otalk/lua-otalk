@@ -6,35 +6,15 @@ c = verse.new();
 c:add_plugin("version");
 c:add_plugin("groupchat");
 c:add_plugin("disco");
---c:add_plugin("jingle");
---c:add_disco_feature(
---"urn:xmpp:jingle:transports:ice-udp:1")
---c:add_disco_feature(
---"urn:xmpp:jingle:transports:raw-udp:1")
 
+local JingleMedia = require "jingleMedia";
 
-local features = {
-    "urn:xmpp:jingle:1", 
-    "urn:xmpp:jingle:apps:rtp:1", 
-    "urn:xmpp:jingle:apps:rtp:audio", 
-    "urn:xmpp:jingle:apps:rtp:video", 
-    "urn:xmpp:jingle:apps:rtp:rtcb-fb:0", 
-    "urn:xmpp:jingle:apps:rtp:rtp-hdrext:0", 
-    "urn:xmpp:jingle:apps:rtp:ssma:0", 
-    "urn:xmpp:jingle:apps:dtls:0", 
-    "urn:xmpp:jingle:apps:grouping:0", 
-    "urn:xmpp:jingle:apps:file-transfer:3", 
-    "urn:xmpp:jingle:transports:ice-udp:1", 
-    "urn:xmpp:jingle:transports.dtls-sctp:1", 
-    "urn:ietf:rfc:3264", 
-    "urn:ietf:rfc:5576", 
-    "urn:ietf:rfc:5888",
-    "http://jitsi.org/protocol/colibri"
-};
-
-for key, feature in pairs(features) do
-    c:add_disco_feature(feature);
-end
+local jingleSession = require "sessionManager";
+jingleSession.init(verse, c, {
+    createSession = function (meta)
+        return JingleMedia:new(meta);
+    end
+});
 
 local xmlns_jingle = "urn:xmpp:jingle:1";
 
@@ -63,7 +43,7 @@ end
 function getParticipants(room)
 end
 
-c:hook("iq/"..xmlns_jingle, handle_jingle)
+--c:hook("iq/"..xmlns_jingle, handle_jingle)
 
 function on(name, func)
     c:hook(name, function(...)
@@ -124,3 +104,4 @@ function connect(jid, password)
     verse.loop()
 
 end
+

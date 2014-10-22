@@ -32,8 +32,7 @@ int main (int argc, char *argv[])
         otalk.on("ready", [&otalk](lua::Value args) -> void {
             std::cout << "======= Begin =======\n";
             //lua::Value room = otalk.state["joinRoom"]("test@conference.jabber.org", "TestBot213");
-            auto room = otalk.joinRoom("fritzyroom3@stage-conference.talky.io", "d9d42630-5317-11e4-916c-0800200c9a66");
-            std::cout << "not broken!\n";
+            auto room = otalk.joinRoom("fritzyroom3@andyet-conference.talky.io", "testbot");
         });
         otalk.on("groupchat/joined", [&otalk](lua::Value args) -> void {
             lua::Value room = args[1];
