@@ -16,20 +16,7 @@ jingleSession.init(verse, c, {
     end
 });
 
-local xmlns_jingle = "urn:xmpp:jingle:1";
-
-function handle_jingle(js)
-    print("got jingle")
-    local tag = js:get_child('jingle', xmlns_jingle);
-    local sid = tag.attr.sid;                                                                            
-    local action = tag.attr.action;
-    c:event("jingle:"..action)
-    if (action == "initiate") then
-        --TODO: convert to SDP and event
-    end
-    c:send(verse.reply(js))
-    return true;
-end
+--local xmlns_jingle = "urn:xmpp:jingle:1";
 
 function startPeer(sdp, target)
 end
@@ -96,7 +83,6 @@ function connect(jid, password)
 
     -- Catch the "ready" event to know when the stream is ready to use
     c:hook("ready", function ()
-        print("Stream ready!");
         c.version:set{ name = "verse++ 1.0" };
         --c:query_version(c.jid, function (v) print("I am using "..(v.name or "<unknown>")); end);
     end);

@@ -1,6 +1,6 @@
 local M = {};
 
-local Jingle = require "jingle";
+local Jingle = require "basejingle";
 
 local global = {
     c = {},
