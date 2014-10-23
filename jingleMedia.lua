@@ -1,4 +1,4 @@
-package.path = "./?.lua;../sdp-jingle-table/src/?.lua;" .. package.path;
+package.path = "./?.lua;./sdp-jingle-table/src/?.lua;" .. package.path;
 
 local Jingle = require("basejingle");
 

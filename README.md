@@ -7,7 +7,13 @@ lua-otalk (OTalk++)
 * luasocket
 * lua-expat
 
+init submodule
+
 ```
+git submodule init
+git submodule update
+```
+
 OTalk otalk;
 
 

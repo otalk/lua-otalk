@@ -1,0 +1,3 @@
+[submodule "sdp-jingle-table"]
+	path = sdp-jingle-table
+	url = git@github.com:otalk/sdp-jingle-table.git
