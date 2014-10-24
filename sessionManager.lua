@@ -40,6 +40,8 @@ M.newSession = function (o)
     o.verse = global.v;
     local session = {};
     local peer = o.peer;
+    o.local_state = {};
+    o.remote_state = {};
     if global.conf["createSession"] then
         session = global.conf["createSession"](o);
     else
@@ -64,6 +66,10 @@ M.addICEServer = function (server)
 end
 
 M.endPeerSessions = function (peer, reason, silent)
+end
+
+M.getSessionBySID = function (sid)
+    return global.sessions[sid];
 end
 
 M.handle = function (req)

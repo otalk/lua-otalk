@@ -30,6 +30,20 @@ end
 function getParticipants(room)
 end
 
+function acceptSDPSession(sid, sdp)
+    local sess = jingleSession.getSessionBySID(sid);
+    sess.acceptSDP(sdp);
+end
+
+function initiateSDPSession(sid, peer, sdp)
+    local sess = jingleSession.newSession({
+        sid = sid,
+        peer = peer,
+        initiator = true,
+    });
+    sess.initiateSDP(sdp);
+end
+
 --c:hook("iq/"..xmlns_jingle, handle_jingle)
 
 function on(name, func)

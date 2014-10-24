@@ -46,11 +46,10 @@ lua::Value OTalk::getParticipants(std::string room) {
     return state["getParticipants"](room);
 }
 
-void OTalk::startPeer(std::string sdp, std::string target) {
-    state["startPeer"](sdp, target);
+void OTalk::initiateSDPSession(std::string sid, std::string peer, std::string sdp) {
+    state["initiateSDPSession"](sid, peer, sdp);
 }
 
-void OTalk::endPeer(std::string session) {
-    state["endPeer"](session);
+void OTalk::acceptSDPSession(std::string sid, std::string sdp) {
+    state["acceptSDPSession"](sid, sdp);
 }
-

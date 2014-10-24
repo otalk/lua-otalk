@@ -22,7 +22,7 @@ class OTalk {
         void leaveRoom(std::string);
         lua::Value getRooms();
         lua::Value getParticipants(std::string);
-        void startPeer(std::string, std::string);
-        void endPeer(std::string);
+        void initiateSDPSession(std::string, std::string, std::string);
+        void acceptSDPSession(std::string, std::string);
 };
 #endif

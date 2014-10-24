@@ -47,7 +47,14 @@ int main (int argc, char *argv[])
         });
 
         otalk.on("jingle/session-initiate-sdp", [&otalk](lua::Value args) -> void {
-            std::cout << "C++ got SDP!\n" << args[1].toString() << "\n" << args[2].toString() << "\n" << args[3].toString() << "\n";
+            std::string in_sdp = args[1].toString();
+            std::string peer = args[2].toString();
+            std::string sid = args[3].toString();
+            std::cout << "C++ got SDP!\n" << in_sdp << "\n" << peer << "\n" << sid << "\n";
+            //
+            //std::string out_sdp = [peerconnect sdp response generator here];
+            //
+            //otalk.acceptSDPSession(sid, out_sdp); 
         });
 
         if (pass.length() == 0) {
