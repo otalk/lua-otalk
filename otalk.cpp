@@ -2,8 +2,9 @@
 #include "./include/LuaState.h"
 #include "otalk.hpp"
 
-OTalk::OTalk() {
-    state.doFile("./wrapper.lua");
+OTalk::OTalk(std::string path) {
+    state.doFile(path + "/wrapper.lua");
+    state["init"](path);
     verse = state["c"];
     emit = state["emit"];
 }

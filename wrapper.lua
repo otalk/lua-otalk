@@ -1,22 +1,24 @@
--- Change these:
---
-require "verse".init("client");
+local c = {};
+local JingleMedia = {};
+local JingleSession = {};
+local verse = {};
 
-c = verse.new();
-c:add_plugin("version");
-c:add_plugin("groupchat");
-c:add_plugin("disco");
+function init(path)
+    package.path = path..'/?.lua;' .. package.path;
+    verse = require "verse".init("client");
+    c = verse.new();
+    c:add_plugin("version");
+    c:add_plugin("groupchat");
+    c:add_plugin("disco");
 
-local JingleMedia = require "jingleMedia";
-
-local jingleSession = require "sessionManager";
-jingleSession.init(verse, c, {
-    createSession = function (meta)
-        return JingleMedia:new(meta);
-    end
-});
-
---local xmlns_jingle = "urn:xmpp:jingle:1";
+    JingleMedia = require "jingleMedia";
+    JingleSession = require "sessionManager";
+    JingleSession.init(verse, c, {
+        createSession = function (meta)
+            return JingleMedia:new(meta);
+        end
+    });
+end
 
 function startPeer(sdp, target)
 end
@@ -43,8 +45,6 @@ function initiateSDPSession(sid, peer, sdp)
     });
     sess.initiateSDP(sdp);
 end
-
---c:hook("iq/"..xmlns_jingle, handle_jingle)
 
 function on(name, func)
     c:hook(name, function(...)
