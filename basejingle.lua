@@ -81,6 +81,60 @@ function Jingle:process(action, req)
     end
 end
 
+
+function Jingle:createJingleStanzaSDP(action, sdp)
+    local jingle = {};
+    if (self.initator) then
+        jingle = jingletolua.toJingle(sdp, 'initiator');
+        jingle.attr.responder = self.peer;
+        jingle.attr.initiator = self.client.full;
+    else
+        jingle = jingletolua.toJingle(sdp, 'responder');
+        jingle.attr.initiator = self.peer;
+        jingle.attr.responder = self.client.full;
+    end
+    jingle.attr.action = action;
+    jingle.attr.sid = self.sid;
+    return jingle;
+end
+
+function Jingle:createJingleStanza(action)
+    local jingle = self.verse.stanza('jingle', {
+        xmlns = "urn:xmpp:jingle:1",
+        action = action,
+        sid = self.sid,
+    });
+    if (self.initiator) then
+        jingle.attr.initiator = self.client.full;
+    else
+        jingle.attr.initiator = self.peer;
+    end
+    return jingle;
+end
+
+function Jingle:createIqStanza(st_type)
+    local iq = self.verse.iq({
+        to = self.peer,
+        from = self.client.full,
+        type = st_type or "set",
+    });
+    return iq;
+end
+
+function Jingle:createSetSDP(action, sdp)
+    local jingle = self:createJingleStanzaSDP(action, sdp);
+    local iq = self:createIqStanza();
+    iq:add_child(jingle);
+    return iq, jingle;
+end
+
+function Jingle:createInfo()
+    local jingle = self:createJingleStanza('session-info');
+    local iq = self:createIqStanza();
+    iq:add_child(jingle);
+    return iq, jingle;
+end
+
 function Jingle:check(state)
     if STATES[state] then
         return self[STATES[state]];

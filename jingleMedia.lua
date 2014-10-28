@@ -3,6 +3,7 @@ package.path = "./?.lua;./sdp-jingle-table/src/?.lua;" .. package.path;
 local Jingle = require("basejingle");
 
 local xmlns_jingle = "urn:xmpp:jingle:1";
+local xmlns_jingle_rtp_info = "urn:xmpp:jingle:apps:rtp:info:1";
 local jingletolua = require("jingletolua");
 jingletolua.init();
 
@@ -47,6 +48,16 @@ function JingleMedia:initiateSDP(sdp)
     self.client:send(iq);
 end
 
+function JingleMedia:removeSourceSDP(sdp)
+    local iq, jingle = self:createSetSDP('source-remove', sdp);
+    self.client:send(iq);
+end
+
+function JingleMedia:addSourceSDP(sdp)
+    local iq, jingle = self.createSetSDP('source-add', sdp);
+    self.client:send(iq);
+end
+
 function JingleMedia:onSourceAdd(req)
     local jingle_tag = req:get_child('jingle', xmlns_jingle);
     local sdp, intermediate = jingletolua.toSDP(jingle_tag);
@@ -67,5 +78,54 @@ function JingleMedia:onSourceRemove(req)
     return true
 end
 
+function JingleMedia:sendMediaInfo(tagname, attr)
+    --<hold xmlns='urn:xmpp:jingle:apps:rtp:info:1'/>
+    local iq, jingle = self:createInfo();
+    local info = self.verse.stanza(tagname, {xmlns = xmlns_jingle_rtp_info});
+    for attr_name, attr_value in pairs(attr) do
+        info.attr[attr_name] = attr_value;
+    end
+    jingle:add_child(info);
+    self.client:send(iq);
+end
+
+function JingleMedia:onSessionInfo(req)
+    local jingle = req:get_child('jingle', xmlns_jingle);
+    for child in jingle:children() do
+        if child.xmlns == xmlns_jingle_rtp_info then
+            self.client:event("jingle/media-info/"..child.name, child.attr.name);
+        end
+    end
+    self.client:send(verse.reply(req));
+    return true;
+end
+
+function JingleMedia:hold()
+    self:sendMediaInfo('hold');
+end
+
+function JingleMedia:resume()
+    self:sendMediaInfo('resume');
+end
+
+function JingleMedia:active()
+    self:sendMediaInfo('resume');
+end
+
+function JingleMedia:mute(media)
+    if (self.initiator) then
+        self:sendMediaInfo('mute', {name = media, creator = 'initiator'});
+    else
+        self:sendMediaInfo('mute', {name = media, creator = 'responder'});
+    end
+end
+
+function JingleMedia:unmute(media)
+    if (self.initiator) then
+        self:sendMediaInfo('unmute', {name = media, creator = 'initiator'});
+    else
+        self:sendMediaInfo('unmute', {name = media, creator = 'responder'});
+    end
+end
 
 return JingleMedia;

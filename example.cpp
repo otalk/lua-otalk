@@ -4,7 +4,7 @@
 int main (int argc, char *argv[])
 {
     std::string path = "./";
-	OTalk otalk(path);
+    OTalk otalk(path);
     if (argc > 1) {
         std::cout << "Connecting as: '" << argv[1] << "n";
         std::string jid = argv[1];
@@ -55,16 +55,16 @@ int main (int argc, char *argv[])
             //
             //std::string out_sdp = [peerconnect sdp response generator here];
             //
-            //otalk.acceptSDPSession(sid, out_sdp); 
+            //otalk.acceptSDPSession(sid, out_sdp);
         });
-        
+
         otalk.on("jingle/source-add-sdp", [&otalk](lua::Value args) -> void {
             std::string in_sdp = args[1].toString();
             std::string peer = args[2].toString();
             std::string sid = args[3].toString();
             std::cout << "C++ source-add-sdp!\n" << in_sdp << "\n" << peer << "\n" << sid << "\n";
         });
-        
+
         otalk.on("jingle/source-remove-sdp", [&otalk](lua::Value args) -> void {
             std::string in_sdp = args[1].toString();
             std::string peer = args[2].toString();
