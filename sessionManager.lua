@@ -126,6 +126,7 @@ M.handle = function (req)
     end
 
     if action ~= "session-initiate" then
+        print "not session initiate"
         if not session then
             print("Uknown jingle session "..sid);
             local error_stanza = global.v.error_reply(req, 'cancel', 'item-not-found'):tag("unknown-session", { xmlns = xmlns_jingle_error }):up();
@@ -198,6 +199,7 @@ M.handle = function (req)
         end
     end
 
+    print "now what"
     if action == "session-initiate" then
         --for reals this time
         if dTCount == 0 then
@@ -219,8 +221,9 @@ M.handle = function (req)
 
         return new_session:process(action, req);
 
+    elseif session then
+        return session:process(action, req);
     end
-
 end;
 
 M.init = function (verse, client, conf)

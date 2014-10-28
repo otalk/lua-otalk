@@ -3,7 +3,8 @@
 
 int main (int argc, char *argv[])
 {
-	OTalk otalk;
+    std::string path = "./";
+	OTalk otalk(path);
     if (argc > 1) {
         std::cout << "Connecting as: '" << argv[1] << "n";
         std::string jid = argv[1];

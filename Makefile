@@ -20,9 +20,10 @@ $(EXECUTABLE):	$(OBJECTS)
 
 # Object files
 # #############
+#$(CXX) $(CXXFLAGS) -c $< -o $@
 #
 $(OBJDIR)/%.o: %.cpp | $(OBJDIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	clang++ $(CXXFLAGS) -c $< -o $@
 
 $(OBJDIR):
 	mkdir -p $(OBJDIR)
