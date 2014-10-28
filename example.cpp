@@ -51,11 +51,25 @@ int main (int argc, char *argv[])
             std::string in_sdp = args[1].toString();
             std::string peer = args[2].toString();
             std::string sid = args[3].toString();
-            std::cout << "C++ got SDP!\n" << in_sdp << "\n" << peer << "\n" << sid << "\n";
+            std::cout << "C++ got session-initiate!\n" << in_sdp << "\n" << peer << "\n" << sid << "\n";
             //
             //std::string out_sdp = [peerconnect sdp response generator here];
             //
             //otalk.acceptSDPSession(sid, out_sdp); 
+        });
+        
+        otalk.on("jingle/source-add-sdp", [&otalk](lua::Value args) -> void {
+            std::string in_sdp = args[1].toString();
+            std::string peer = args[2].toString();
+            std::string sid = args[3].toString();
+            std::cout << "C++ source-add-sdp!\n" << in_sdp << "\n" << peer << "\n" << sid << "\n";
+        });
+        
+        otalk.on("jingle/source-remove-sdp", [&otalk](lua::Value args) -> void {
+            std::string in_sdp = args[1].toString();
+            std::string peer = args[2].toString();
+            std::string sid = args[3].toString();
+            std::cout << "C++ source-remove-sdp!\n" << in_sdp << "\n" << peer << "\n" << sid << "\n";
         });
 
         if (pass.length() == 0) {

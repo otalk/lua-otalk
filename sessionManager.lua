@@ -115,8 +115,6 @@ M.handle = function (req)
             local description_tag = child_tag:child_with_name("description");
             if description_tag and description_tag.attr.media then
                 dTCount = dTCount + 1;
-                print("---");
-                print(description_tag.attr);
                 descriptionTypes[description_tag.attr.media.."/"..description_tag.attr.xmlns] = true;
             end
         end
@@ -126,7 +124,6 @@ M.handle = function (req)
     end
 
     if action ~= "session-initiate" then
-        print "not session initiate"
         if not session then
             print("Uknown jingle session "..sid);
             local error_stanza = global.v.error_reply(req, 'cancel', 'item-not-found'):tag("unknown-session", { xmlns = xmlns_jingle_error }):up();
@@ -199,7 +196,6 @@ M.handle = function (req)
         end
     end
 
-    print "now what"
     if action == "session-initiate" then
         --for reals this time
         if dTCount == 0 then
