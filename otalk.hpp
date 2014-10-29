@@ -32,5 +32,6 @@ class OTalk {
         void ringSession(std::string);
         void holdSession(std::string);
         void resumeSession(std::string);
+        void addCandidate(std::string, std::string, int, std::string);
 };
 #endif

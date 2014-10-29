@@ -44,9 +44,9 @@ function removeSource(sid, sdp)
     sess:removeSource(sdp);
 end
 
-function addCandidate(sid, mid, mline, canidate)
+function addCandidate(sid, mid, mline, candidate)
     local sess = jingleSession.getSessionBySID(sid);
-    sess:addCandidate(mid, mline, canidate);
+    sess:addCandidate(mid, mline, candidate);
 end
 
 function activateSession(sid)
