@@ -22,7 +22,7 @@ end
 
 function acceptSession(sid, sdp)
     local sess = jingleSession.getSessionBySID(sid);
-    sess.acceptSDP(sdp);
+    sess:acceptSDP(sdp);
 end
 
 function initiateSession(sid, peer, sdp)
@@ -31,15 +31,22 @@ function initiateSession(sid, peer, sdp)
         peer = peer,
         initiator = true,
     });
-    sess.initiateSDP(sdp);
+    sess:initiateSDP(sdp);
 end
 
 function addSource(sid, sdp)
     local sess = jingleSession.getSessionBySID(sid);
+    sess:addSource(sdp);
 end
 
 function removeSource(sid, sdp)
     local sess = jingleSession.getSessionBySID(sid);
+    sess:removeSource(sdp);
+end
+
+function addCandidate(sid, mid, mline, canidate)
+    local sess = jingleSession.getSessionBySID(sid);
+    sess:addCandidate(mid, mline, canidate);
 end
 
 function activateSession(sid)
