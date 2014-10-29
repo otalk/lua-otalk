@@ -21,19 +21,13 @@ void OTalk::connect(std::string jid, std::string password) {
     state["connect"](jid, password);
 }
 
-lua::Value OTalk::joinRoom(std::string rjid, std::string nick) {
-    return state["joinRoom"](rjid, nick);
-}
-
 void OTalk::on(std::string name, std::function<void(lua::Value)> callback) {
     state["on"](name, callback);
 }
 
-/*
-void OTalk::emit(std::string name, lua::Value args) {
-    state["emit"](name, args);
+lua::Value OTalk::joinRoom(std::string rjid, std::string nick) {
+    return state["joinRoom"](rjid, nick);
 }
-*/
 
 void OTalk::leaveRoom(std::string room) {
     state["leaveRoom"](room);
@@ -48,9 +42,41 @@ lua::Value OTalk::getParticipants(std::string room) {
 }
 
 void OTalk::initiateSDPSession(std::string sid, std::string peer, std::string sdp) {
-    state["initiateSDPSession"](sid, peer, sdp);
+    state["initiateSession"](sid, peer, sdp);
 }
 
 void OTalk::acceptSDPSession(std::string sid, std::string sdp) {
-    state["acceptSDPSession"](sid, sdp);
+    state["acceptSession"](sid, sdp);
+}
+
+void OTalk::addSource(std::string sid, std::string sdp) {
+    state["addSource"](sid, sdp);
+}
+
+void OTalk::removeSource(std::string sid, std::string sdp) {
+    state["removeSource"](sid, sdp);
+}
+
+void OTalk::activateSession(std::string sid) {
+    state["activateSession"](sid);
+}
+
+void OTalk::muteSession(std::string sid, std::string media) {
+    state["muteSession"](sid, media);
+}
+
+void OTalk::unmuteSession(std::string sid, std::string media) {
+    state["unmuteSession"](sid, media);
+}
+
+void OTalk::ringSession(std::string sid) {
+    state["ringSession"](sid);
+}
+
+void OTalk::holdSession(std::string sid) {
+    state["holdSession"](sid);
+}
+
+void OTalk::resumeSession(std::string sid) {
+    state["resumeSession"](sid);
 }

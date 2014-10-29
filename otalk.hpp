@@ -24,5 +24,13 @@ class OTalk {
         lua::Value getParticipants(std::string);
         void initiateSDPSession(std::string, std::string, std::string);
         void acceptSDPSession(std::string, std::string);
+        void addSource(std::string, std::string);
+        void removeSource(std::string, std::string);
+        void activateSession(std::string);
+        void muteSession(std::string, std::string);
+        void unmuteSession(std::string, std::string);
+        void ringSession(std::string);
+        void holdSession(std::string);
+        void resumeSession(std::string);
 };
 #endif

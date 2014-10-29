@@ -20,24 +20,12 @@ function init(path)
     });
 end
 
-function startPeer(sdp, target)
-end
-
-function endPeer(session)
-end
-
-function getRooms()
-end
-
-function getParticipants(room)
-end
-
-function acceptSDPSession(sid, sdp)
+function acceptSession(sid, sdp)
     local sess = jingleSession.getSessionBySID(sid);
     sess.acceptSDP(sdp);
 end
 
-function initiateSDPSession(sid, peer, sdp)
+function initiateSession(sid, peer, sdp)
     local sess = jingleSession.newSession({
         sid = sid,
         peer = peer,
@@ -46,18 +34,65 @@ function initiateSDPSession(sid, peer, sdp)
     sess.initiateSDP(sdp);
 end
 
-function on(name, func)
-    c:hook(name, function(...)
-        func(arg);
-    end)
+function addSource(sid, sdp)
+    local sess = jingleSession.getSessionBySID(sid);
+end
+
+function removeSource(sid, sdp)
+    local sess = jingleSession.getSessionBySID(sid);
+end
+
+function activateSession(sid)
+    local sess = jingleSession.getSessionBySID(sid);
+    sess:active();
+end
+
+function holdSession(sid)
+    local sess = jingleSession.getSessionBySID(sid);
+    sess:hold();
+end
+
+function resumeSession(sid)
+    local sess = jingleSession.getSessionBySID(sid);
+    sess:resume();
+end
+
+function muteSession(sid, media)
+    local sess = jingleSession.getSessionBySID(sid);
+    sess:mute(media);
+end
+
+function unmuteSession(sid, media)
+    local sess = jingleSession.getSessionBySID(sid);
+    sess:unmute(media);
+end
+
+function ringSession(sid)
+    local sess = jingleSession.getSessionBySID(sid);
+    sess:ring();
 end
 
 function emit(name, ...)
     c:event(name, unpack(arg));
 end
 
-function joinRoom(name, nick)
-    c:join_room(name, nick);
+function joinRoom(room, nick)
+    c:join_room(room, nick);
+end
+
+function leaveRoom(room)
+end
+
+function getRooms()
+end
+
+function getParticipants(room)
+end
+
+function messageRoom(room, msg)
+end
+
+function sendPrivateMessage(room, nick, msg)
 end
 
 function log_out(txt)
@@ -66,6 +101,12 @@ end
 
 function log_in(txt)
     print("In: "..txt);
+end
+
+function on(name, func)
+    c:hook(name, function(...)
+        func(arg);
+    end)
 end
 
 function connect(jid, password)

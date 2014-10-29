@@ -112,6 +112,10 @@ function JingleMedia:active()
     self:sendMediaInfo('resume');
 end
 
+function JingleMedia:ring()
+    self:sendMediaInfo('ring');
+end
+
 function JingleMedia:mute(media)
     if (self.initiator) then
         self:sendMediaInfo('mute', {name = media, creator = 'initiator'});
