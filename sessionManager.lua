@@ -161,7 +161,7 @@ M.handle = function (req)
         end
 
         if session.isPending then
-            if c.bound > session.peerId then
+            if c.bound > session.peerID then
                 print("Tie break new session because of duplicate sids");
                 local error_stanza = req:error_reply('cancel', 'conflict'):tag("tie-break", {xmlns = xmlns_jingle_error}):up();
                 global.c:send(error_stanza);
@@ -176,7 +176,7 @@ M.handle = function (req)
 
     elseif (global.peers[sender] and #global.peers[sender] > 0) then
         --it's a tie!
-        for sess_idx, sess in table.ipairs(gobal.peers[sender]) do
+        for sess_idx, sess in table.ipairs(global.peers[sender]) do
             if sess and sess.isPending then
                 local conflict = false;
                 for desc_idx, desc_bool in table.pairs(descriptionTypes) do

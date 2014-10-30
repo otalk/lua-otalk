@@ -12,8 +12,8 @@ function init(path)
     c:add_plugin("disco");
 
     JingleMedia = require "jingleMedia";
-    JingleSession = require "sessionManager";
-    JingleSession.init(verse, c, {
+    jingleSession = require "sessionManager";
+    jingleSession.init(verse, c, {
         createSession = function (meta)
             return JingleMedia:new(meta);
         end
@@ -147,6 +147,7 @@ function connect(jid, password)
     c:hook("ready", function ()
         c.version:set{ name = "verse++ 1.0" };
         --c:query_version(c.jid, function (v) print("I am using "..(v.name or "<unknown>")); end);
+        c:send(verse.presence())
     end);
 
     verse.loop()

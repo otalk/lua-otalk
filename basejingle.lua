@@ -13,7 +13,7 @@ function Jingle:new(o)
     };
     o.sid = o.sid or UUID();
     o.peerID = o.peerID or o.peer;
-    o.isInitiator = o.initator or false;
+    o.isInitiator = o.initiator or false;
     o.isPending = false;
     o.isEnded = false;
     o.pendingAction = false;
@@ -84,7 +84,7 @@ end
 
 function Jingle:createJingleStanzaSDP(action, sdp)
     local jingle = {};
-    if (self.initator) then
+    if (self.initiator) then
         jingle = jingletolua.toJingle(sdp, 'initiator');
         jingle.attr.responder = self.peer;
         jingle.attr.initiator = self.client.full;

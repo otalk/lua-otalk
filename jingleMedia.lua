@@ -12,7 +12,7 @@ local JingleMedia = Jingle:new();
 function JingleMedia:onSessionInitiate(req)
     local jingle_tag = req:get_child('jingle', xmlns_jingle);
     local sdp, intermediate = jingletolua.toSDP(jingle_tag);
-    self.remote_state = intermediate;
+    self.remote_state = intermediate.contents;
     self.client:event("jingle/session-initiate-sdp", sdp, self.peer, self.sid);
     self.client:send(verse.reply(req));
     return true;
@@ -20,7 +20,7 @@ end
 
 function JingleMedia:acceptSDP(sdp)
     local jingle, intermediate = jingletolua.toJingle(sdp, 'responder');
-    self.remote_state = intermedia;
+    self.remote_state = intermediate.contents;
     jingle.attr.initiator = self.peer;
     jingle.attr.responder = self.client.full;
     jingle.attr.action = 'session-accept';
@@ -35,8 +35,8 @@ function JingleMedia:acceptSDP(sdp)
 end
 
 function JingleMedia:initiateSDP(sdp)
-    local jingle, intermedia = jingletolua.toJingle(sdp, 'initiator');
-    self.remote_state = intermedia;
+    local jingle, intermediate = jingletolua.toJingle(sdp, 'initiator');
+    -- self.remote_state = intermediate.contents;
     jingle.attr.responder = self.peer;
     jingle.attr.initiator = self.client.full;
     jingle.attr.action = 'session-initiate';
@@ -61,12 +61,60 @@ function JingleMedia:addSourceSDP(sdp)
 end
 
 function JingleMedia:addCandidate(mid, mline, candidate)
+    print("Yay ICE!")
+    candidate = "a=" .. candidate
+    local candidateTable = jingletolua.toCandidateTable(candidate)
+    local audio = { name = mid, 
+        transport = {
+            candidates = {
+                candidateTable
+            }
+        }
+    }
+    local jingleTable = { contents = { audio }}
+
+    local jingle = jingletolua.toStanza(jingleTable, 'initiator');
+    jingle.attr.initiator = self.peer;
+    jingle.attr.responder = self.client.full;
+    jingle.attr.action = 'transport-info';
+    jingle.attr.sid = self.sid;
+    local iq = self.verse.iq({
+        to = self.peer,
+        from = self.client.full,
+        type = "set",
+    });
+    iq:add_child(jingle);
+    self.client:send(iq);
 end
 
 function JingleMedia:onTransportInfo(req)
-    --TODO something something something
-    self.client:event("jingle/transport-canidate", sdp, self.peer, self.sid);
     self.client:send(verse.reply(req));
+    --TODO something something something
+    local jingle_tag = req:get_child('jingle', xmlns_jingle);
+    ---[[
+    local sdp, jingleTable = jingletolua.toSDP(jingle_tag)
+    print("onTransportInfo:\n" .. sdp)
+    for _, content in pairs(jingleTable.contents) do
+        if (content.transport) then
+            for _, candidate in pairs(content.transport.candidates) do
+                -- toSDP
+                local sdp = jingletolua.toCandidateSDP(candidate)
+                -- Drop a=
+                sdp = string.sub(sdp, 3)
+                -- emit mid, mline, sdp
+                local mline = 0
+                for i, oldContent in ipairs(self.remote_state) do
+                    if oldContent.name == content.name then
+                        mline = i - 1
+                        break
+                    end
+                end
+                self.client:event("jingle/transport-candidate", content.name, mline, sdp, self.peer, self.sid);
+            end
+        end
+    end
+    --]]
+    return true
 end
 
 function JingleMedia:onSourceAdd(req)
