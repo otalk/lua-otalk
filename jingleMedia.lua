@@ -19,7 +19,10 @@ function JingleMedia:onSessionInitiate(req)
 end
 
 function JingleMedia:acceptSDP(sdp)
-    local jingle, intermediate = jingletolua.toJingle(sdp, 'responder');
+    print("acceptSDP: " .. sdp)
+    local jingle, intermediate = jingletolua.toJingle(sdp, 'initiator');
+    print("acceptSDP jingle:")
+    print(jingle)
     self.remote_state = intermediate.contents;
     jingle.attr.initiator = self.peer;
     jingle.attr.responder = self.client.full;

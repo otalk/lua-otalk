@@ -89,7 +89,7 @@ function Jingle:createJingleStanzaSDP(action, sdp)
         jingle.attr.responder = self.peer;
         jingle.attr.initiator = self.client.full;
     else
-        jingle = jingletolua.toJingle(sdp, 'responder');
+        jingle = jingletolua.toJingle(sdp, 'initiator');
         jingle.attr.initiator = self.peer;
         jingle.attr.responder = self.client.full;
     end
