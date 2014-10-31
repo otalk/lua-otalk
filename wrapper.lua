@@ -85,6 +85,9 @@ end
 
 function joinRoom(room, nick)
     c:join_room(room, nick);
+    local t = os.clock();
+    while os.clock() - t <= 30 do end
+    print "done sleeping"
 end
 
 function leaveRoom(room)

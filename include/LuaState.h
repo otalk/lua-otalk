@@ -44,6 +44,9 @@
 #include "./LuaFunctor.h"
 #include "./LuaRef.h"
 
+std::mutex lua_mutex;
+
+
 namespace lua {
     
     //////////////////////////////////////////////////////////////////////////////////////////////
@@ -153,7 +156,14 @@ namespace lua {
             stack::push(_luaState, std::forward<T>(value));
             lua_setglobal(_luaState, key);
         }
-        
+        void lock () {
+            lua_mutex.lock();
+        }
+
+        void unlock () {
+            lua_mutex.unlock();
+        }
+
         /// Executes file text on Lua state
         ///
         /// @throws lua::LoadError      When file cannot be found or loaded
