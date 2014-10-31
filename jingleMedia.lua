@@ -9,12 +9,23 @@ jingletolua.init();
 
 local JingleMedia = Jingle:new();
 
-function JingleMedia:onSessionInitiate(req)
+function JingleMedia:onSessionAccept(req)
+    self.client:send(verse.reply(req));
     local jingle_tag = req:get_child('jingle', xmlns_jingle);
     local sdp, intermediate = jingletolua.toSDP(jingle_tag);
     self.remote_state = intermediate.contents;
-    self.client:event("jingle/session-initiate-sdp", sdp, self.peer, self.sid);
+    self.isPending = false;
+    self.client:event("jingle/session-accept-sdp", sdp, self.peer, self.sid);
+    return true;
+end
+
+function JingleMedia:onSessionInitiate(req)
     self.client:send(verse.reply(req));
+    local jingle_tag = req:get_child('jingle', xmlns_jingle);
+    local sdp, intermediate = jingletolua.toSDP(jingle_tag);
+    self.remote_state = intermediate.contents;
+    self.isPending = true;
+    self.client:event("jingle/session-initiate-sdp", sdp, self.peer, self.sid);
     return true;
 end
 
@@ -23,7 +34,8 @@ function JingleMedia:acceptSDP(sdp)
     local jingle, intermediate = jingletolua.toJingle(sdp, 'initiator');
     print("acceptSDP jingle:")
     print(jingle)
-    self.remote_state = intermediate.contents;
+    self.local_state = intermediate.contents;
+    self.isPending = false;
     jingle.attr.initiator = self.peer;
     jingle.attr.responder = self.client.full;
     jingle.attr.action = 'session-accept';
@@ -39,7 +51,8 @@ end
 
 function JingleMedia:initiateSDP(sdp)
     local jingle, intermediate = jingletolua.toJingle(sdp, 'initiator');
-    -- self.remote_state = intermediate.contents;
+    self.local_state = intermediate.contents;
+    self.isPending = true;
     jingle.attr.responder = self.peer;
     jingle.attr.initiator = self.client.full;
     jingle.attr.action = 'session-initiate';
@@ -121,21 +134,21 @@ function JingleMedia:onTransportInfo(req)
 end
 
 function JingleMedia:onSourceAdd(req)
+    self.client:send(verse.reply(req));
     local jingle_tag = req:get_child('jingle', xmlns_jingle);
     local sdp, intermediate = jingletolua.toSDP(jingle_tag);
     --self.remote_state = jingletolua.mergeSDP(self.remote_state, intermediate);
     self.client:event("jingle/source-add-sdp", sdp, self.peer, self.sid);
-    self.client:send(verse.reply(req));
     return true;
 end
 
 function JingleMedia:onSourceRemove(req)
+    self.client:send(verse.reply(req));
     local jingle_tag = req:get_child('jingle', xmlns_jingle);
     local sdp, intermediate = jingletolua.toSDP(jingle_tag);
     --self.remote_state = intermediate;
     --self.remote_state = jingletolua.mergeSDP(self.remote_state, intermediate);
     self.client:event("jingle/source-remove-sdp", sdp, self.peer, self.sid);
-    self.client:send(verse.reply(req));
     return true
 end
 
@@ -151,13 +164,13 @@ function JingleMedia:sendMediaInfo(tagname, attr)
 end
 
 function JingleMedia:onSessionInfo(req)
+    self.client:send(verse.reply(req));
     local jingle = req:get_child('jingle', xmlns_jingle);
     for child in jingle:children() do
         if child.xmlns == xmlns_jingle_rtp_info then
             self.client:event("jingle/media-info/"..child.name, child.attr.name);
         end
     end
-    self.client:send(verse.reply(req));
     return true;
 end
 
