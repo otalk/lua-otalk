@@ -12,7 +12,7 @@ local JingleMedia = Jingle:new();
 function JingleMedia:onSessionAccept(req)
     self.client:send(verse.reply(req));
     local jingle_tag = req:get_child('jingle', xmlns_jingle);
-    local sdp, intermediate = jingletolua.toSDP(jingle_tag);
+    local sdp, intermediate = jingletolua.toIncomingAnswerSDP(jingle_tag);
     self.remote_state = intermediate.contents;
     self.isPending = false;
     self.client:event("jingle/session-accept-sdp", sdp, self.peer, self.sid);
@@ -22,7 +22,7 @@ end
 function JingleMedia:onSessionInitiate(req)
     self.client:send(verse.reply(req));
     local jingle_tag = req:get_child('jingle', xmlns_jingle);
-    local sdp, intermediate = jingletolua.toSDP(jingle_tag);
+    local sdp, intermediate = jingletolua.toIncomingOfferSDP(jingle_tag);
     self.remote_state = intermediate.contents;
     self.isPending = true;
     self.client:event("jingle/session-initiate-sdp", sdp, self.peer, self.sid);
@@ -31,7 +31,7 @@ end
 
 function JingleMedia:acceptSDP(sdp)
     print("acceptSDP: " .. sdp)
-    local jingle, intermediate = jingletolua.toJingle(sdp, 'initiator');
+    local jingle, intermediate = jingletolua.toOutgoingAnswerJingle(sdp);
     print("acceptSDP jingle:")
     print(jingle)
     self.local_state = intermediate.contents;
@@ -50,7 +50,7 @@ function JingleMedia:acceptSDP(sdp)
 end
 
 function JingleMedia:initiateSDP(sdp)
-    local jingle, intermediate = jingletolua.toJingle(sdp, 'initiator');
+    local jingle, intermediate = jingletolua.toOutgoingOfferJingle(sdp);
     self.local_state = intermediate.contents;
     self.isPending = true;
     jingle.attr.responder = self.peer;
@@ -89,7 +89,7 @@ function JingleMedia:addCandidate(mid, mline, candidate)
     }
     local jingleTable = { contents = { audio }}
 
-    local jingle = jingletolua.toStanza(jingleTable, 'initiator');
+    local jingle = jingletolua.toJingle(jingleTable, 'initiator');
     jingle.attr.initiator = self.peer;
     jingle.attr.responder = self.client.full;
     jingle.attr.action = 'transport-info';
