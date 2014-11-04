@@ -174,10 +174,35 @@ end
 function JingleMedia:onSourceRemove(req)
     self.client:send(verse.reply(req));
     local jingle_tag = req:get_child('jingle', xmlns_jingle);
-    local sdp, intermediate = jingletolua.toSDP(jingle_tag);
-    --self.remote_state = intermediate;
-    --self.remote_state = jingletolua.mergeSDP(self.remote_state, intermediate);
-    self.client:event("jingle/source-remove-sdp", sdp, self.peer, self.sid);
+    local changesTable = jingletolua.jingleToTable(jingle_tag);
+    local sourceRemoved = false
+    for i, content in ipairs(self.remote_state.contents) do
+        local desc = content.description
+        local ssrcs = desc.sources or {}
+
+        for _, newContent in ipairs(changesTable.contents) do
+            if (content.name == newContent.name) then
+                local newContentsDesc = newContent.description
+                local newSSRCs = newContentsDesc.sources or {}
+
+                for j=#ssrcs,1,-1 do
+                    for _, newSSRC in pairs(newSSRCs) do
+                        if ssrcs[j].ssrc == newSSRC.ssrc then
+                            sourceRemoved = true
+                            table.remove(ssrcs, j)
+                        end
+                    end
+                end
+            end
+
+            self.remote_state.contents[i].description.sources = ssrcs
+        end
+    end
+
+    if sourceRemoved then
+        local sdp = jingletolua.toIncomingSDPOffer(self.remote_state)
+        self.client:event("jingle/source-remove-sdp", sdp, self.peer, self.sid);
+    end
     return true
 end
 
