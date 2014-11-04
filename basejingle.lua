@@ -167,6 +167,10 @@ end
 function Jingle:onTransportReplace(req)
 end
 
+function Jingle:onSessionTerminate(req)
+    print("Received session terminate")
+end
+
 function Jingle:endSession(reason)
 end
 

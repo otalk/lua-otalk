@@ -176,10 +176,10 @@ M.handle = function (req)
 
     elseif (global.peers[sender] and #global.peers[sender] > 0) then
         --it's a tie!
-        for sess_idx, sess in table.ipairs(global.peers[sender]) do
+        for sess_idx, sess in ipairs(global.peers[sender]) do
             if sess and sess.isPending then
                 local conflict = false;
-                for desc_idx, desc_bool in table.pairs(descriptionTypes) do
+                for desc_idx, desc_bool in pairs(descriptionTypes) do
                     if session.pendingDescriptionTypes[desc_idx] then
                         conflict = true;
                         break;

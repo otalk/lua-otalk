@@ -13,7 +13,7 @@ function JingleMedia:onSessionAccept(req)
     self.client:send(verse.reply(req));
     local jingle_tag = req:get_child('jingle', xmlns_jingle);
     local sdp, intermediate = jingletolua.toIncomingAnswerSDP(jingle_tag);
-    self.remote_state = intermediate.contents;
+    self.remote_state = intermediate;
     self.isPending = false;
     self.client:event("jingle/session-accept-sdp", sdp, self.peer, self.sid);
     return true;
@@ -23,7 +23,7 @@ function JingleMedia:onSessionInitiate(req)
     self.client:send(verse.reply(req));
     local jingle_tag = req:get_child('jingle', xmlns_jingle);
     local sdp, intermediate = jingletolua.toIncomingOfferSDP(jingle_tag);
-    self.remote_state = intermediate.contents;
+    self.remote_state = intermediate;
     self.isPending = true;
     self.client:event("jingle/session-initiate-sdp", sdp, self.peer, self.sid);
     return true;
@@ -34,7 +34,7 @@ function JingleMedia:acceptSDP(sdp)
     local jingle, intermediate = jingletolua.toOutgoingAnswerJingle(sdp);
     print("acceptSDP jingle:")
     print(jingle)
-    self.local_state = intermediate.contents;
+    self.local_state = intermediate;
     self.isPending = false;
     jingle.attr.initiator = self.peer;
     jingle.attr.responder = self.client.full;
@@ -51,7 +51,7 @@ end
 
 function JingleMedia:initiateSDP(sdp)
     local jingle, intermediate = jingletolua.toOutgoingOfferJingle(sdp);
-    self.local_state = intermediate.contents;
+    self.local_state = intermediate;
     self.isPending = true;
     jingle.attr.responder = self.peer;
     jingle.attr.initiator = self.client.full;
@@ -119,7 +119,7 @@ function JingleMedia:onTransportInfo(req)
                 sdp = string.sub(sdp, 3)
                 -- emit mid, mline, sdp
                 local mline = 0
-                for i, oldContent in ipairs(self.remote_state) do
+                for i, oldContent in ipairs(self.remote_state.contents) do
                     if oldContent.name == content.name then
                         mline = i - 1
                         break
@@ -134,11 +134,40 @@ function JingleMedia:onTransportInfo(req)
 end
 
 function JingleMedia:onSourceAdd(req)
+    print("onSourceAdd")
     self.client:send(verse.reply(req));
     local jingle_tag = req:get_child('jingle', xmlns_jingle);
-    local sdp, intermediate = jingletolua.toSDP(jingle_tag);
-    --self.remote_state = jingletolua.mergeSDP(self.remote_state, intermediate);
-    self.client:event("jingle/source-add-sdp", sdp, self.peer, self.sid);
+    local changesTable = jingletolua.jingleToTable(jingle_tag);
+    local sourceAdded = false
+    for i, content in ipairs(self.remote_state.contents) do
+        print("remote_state contents isn't empty in Lua land")
+        local desc = content.description
+        local ssrcs = desc.sources or {}
+
+        for _, newContent in ipairs(changesTable.contents) do
+            print("there are new contents in Lua land")
+            print("content stuff: " .. newContent.creator .. ", " .. newContent.senders)
+            print("name: " .. content.name .. " - " .. newContent.name)
+            if (content.name == newContent.name) then
+                print("names match in Lua land")
+                local newContentsDesc = newContent.description
+                local newSSRCs = newContentsDesc.sources or {}
+
+                for _, newSSRC in pairs(newSSRCs) do
+                    print("A source was added in Lua land")
+                    sourceAdded = true
+                    table.insert(ssrcs, newSSRC)
+                end
+
+                self.remote_state.contents[i].description.sources = ssrcs
+            end
+        end
+    end
+
+    if sourceAdded then
+        local sdp = jingletolua.toIncomingSDPOffer(self.remote_state);
+        self.client:event("jingle/source-add-sdp", sdp, self.peer, self.sid);
+    end
     return true;
 end
 
