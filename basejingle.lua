@@ -41,7 +41,7 @@ ACTIONS['security-info'] = 'onSecurityInfo';
 ACTIONS['session-accept'] = 'onSessionAccept';
 ACTIONS['session-info'] = 'onSessionInfo';
 ACTIONS['session-initiate'] = 'onSessionInitiate';
-ACTIONS['session-terminate'] = 'onSessionTerminate';
+--ACTIONS['session-terminate'] = 'onSessionTerminate';
 ACTIONS['transport-accept'] = 'onTransportAccept';
 ACTIONS['transport-info'] = 'onTransportInfo';
 ACTIONS['transport-reject'] = 'onTransportReject';
@@ -165,10 +165,6 @@ function Jingle:onSessionAccept(req)
 end
 
 function Jingle:onTransportReplace(req)
-end
-
-function Jingle:onSessionTerminate(req)
-    print("Received session terminate")
 end
 
 function Jingle:endSession(reason)

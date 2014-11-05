@@ -72,6 +72,23 @@ M.getSessionBySID = function (sid)
     return global.sessions[sid];
 end
 
+M.onSessionTerminate = function (req, sid)
+    global.c:send(verse.reply(req));
+
+    local sessionIndex
+    for i, session in ipairs(global.sessions) do
+        if sid == session.sid then
+            sessionIndex = i
+            break
+        end
+    end
+
+    table.remove(global.sessions, sessionIndex)
+
+    global.c:event("jingle/session-terminate", sid)
+    return true
+end
+
 M.handle = function (req)
     local tag = req:get_child('jingle', xmlns_jingle);
     local sid = tag.attr.sid;
@@ -216,6 +233,9 @@ M.handle = function (req)
         });
 
         return new_session:process(action, req);
+
+    elseif action == "session-terminate" then
+        M.onSessionTerminate(req, sid)
 
     elseif session then
         return session:process(action, req);

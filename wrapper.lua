@@ -1,6 +1,6 @@
 local c = {};
 local JingleMedia = {};
-local JingleSession = {};
+local jingleSession = {};
 local verse = {};
 
 function init(path)
