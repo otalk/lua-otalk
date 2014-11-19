@@ -42,9 +42,7 @@ lua::Value OTalk::getParticipants(std::string room) {
 }
 
 void OTalk::initiateSDPSession(std::string sid, std::string peer, std::string sdp) {
-    state.lock();
     state["initiateSession"](sid, peer, sdp);
-    state.unlock();
 }
 
 void OTalk::acceptSDPSession(std::string sid, std::string sdp) {

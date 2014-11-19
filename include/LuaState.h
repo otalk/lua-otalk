@@ -44,8 +44,6 @@
 #include "./LuaFunctor.h"
 #include "./LuaRef.h"
 
-std::mutex lua_mutex;
-
 
 namespace lua {
     
@@ -155,13 +153,6 @@ namespace lua {
         void set(lua::String key, T value) const {
             stack::push(_luaState, std::forward<T>(value));
             lua_setglobal(_luaState, key);
-        }
-        void lock () {
-            lua_mutex.lock();
-        }
-
-        void unlock () {
-            lua_mutex.unlock();
         }
 
         /// Executes file text on Lua state
