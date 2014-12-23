@@ -78,8 +78,10 @@ int main (int argc, char *argv[])
         } else {
             otalk.connect(jid, pass);
         }
+        while (1) {
+            otalk.step();
+        }
         return 0;
-
     } else {
         std::cout << "Usage: " << argv[0] << " [username@][server] [password]\n";
         return 1;

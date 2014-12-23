@@ -153,7 +153,10 @@ function connect(jid, password)
         c:send(verse.presence())
     end);
 
-    verse.loop()
+    --verse.loop()
 
 end
 
+function step()
+    verse.step()
+end
