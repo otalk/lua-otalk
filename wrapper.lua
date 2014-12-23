@@ -6,6 +6,7 @@ local verse = {};
 function init(path)
     package.path = path..'/?.lua;' .. package.path;
     verse = require "verse".init("client");
+    verse.require "net.server".changesettings({timeout = 0.2})
     c = verse.new();
     c:add_plugin("version");
     c:add_plugin("groupchat");
