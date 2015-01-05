@@ -6,6 +6,7 @@ local verse = {};
 function init(path)
     package.path = path..'/?.lua;' .. package.path;
     verse = require "verse".init("client");
+    verse.require "net.server".changesettings({timeout = 0.2})
     c = verse.new();
     c:add_plugin("version");
     c:add_plugin("groupchat");
@@ -85,9 +86,6 @@ end
 
 function joinRoom(room, nick)
     c:join_room(room, nick);
-    local t = os.clock();
-    while os.clock() - t <= 30 do end
-    print "done sleeping"
 end
 
 function leaveRoom(room)
@@ -153,7 +151,10 @@ function connect(jid, password)
         c:send(verse.presence())
     end);
 
-    verse.loop()
+    --verse.loop()
 
 end
 
+function step()
+    verse.step()
+end

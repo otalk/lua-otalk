@@ -9,6 +9,10 @@ OTalk::OTalk(std::string path) {
     emit = state["emit"];
 }
 
+void OTalk::step() {
+    state["step"]();
+}
+
 void OTalk::connect(std::string jid) {
     jid = jid;
     //connecting anonymously

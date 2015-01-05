@@ -12,6 +12,7 @@ class OTalk {
         lua::State state;
 		std::string jid;
 		OTalk(std::string);
+        void step();
         void connect(std::string, std::string);
         void connect(std::string);
         //std::function<lua::Value(std::string, std::function<void(lua::Value)>)> hook;
