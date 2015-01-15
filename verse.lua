@@ -7340,7 +7340,11 @@ function verse.plugins.groupchat(stream)
 				return room:event("subject-changed", { from = old_subject, to = subject, by = event.sender, event = event });
 			end
 		end, 2000);
-		local join_st = verse.presence():tag("x",{xmlns = xmlns_muc}):reset();
+		local join_st = verse.presence():tag("x",{xmlns = xmlns_muc});
+        if opts.password then
+            join_st:tag("password"):text(opts.password);
+        end
+        join_st = join_st:reset();
 		self:event("pre-groupchat/joining", join_st);
 		room:send(join_st)
 		self:event("groupchat/joining", room);

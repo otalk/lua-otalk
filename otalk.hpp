@@ -19,7 +19,7 @@ class OTalk {
         void on(std::string, std::function<void(lua::Value)>);
         //void emit(std::string, lua::Value);
         lua::Value emit;
-        lua::Value joinRoom(std::string, std::string);
+        lua::Value joinRoom(std::string, std::string, std::string);
         void leaveRoom(std::string);
         lua::Value getRooms();
         lua::Value getParticipants(std::string);

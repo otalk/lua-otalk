@@ -84,8 +84,14 @@ function emit(name, ...)
     c:event(name, unpack(arg));
 end
 
-function joinRoom(room, nick)
-    c:join_room(room, nick);
+function joinRoom(room, nick, key)
+    if key then
+        c:join_room(room, nick, {
+            password = key
+        });
+    else
+        c:join_room(room, nick);
+    end
 end
 
 function leaveRoom(room)

@@ -29,8 +29,8 @@ void OTalk::on(std::string name, std::function<void(lua::Value)> callback) {
     state["on"](name, callback);
 }
 
-lua::Value OTalk::joinRoom(std::string rjid, std::string nick) {
-    return state["joinRoom"](rjid, nick);
+lua::Value OTalk::joinRoom(std::string rjid, std::string nick, std::string password) {
+    return state["joinRoom"](rjid, nick, password);
 }
 
 void OTalk::leaveRoom(std::string room) {
