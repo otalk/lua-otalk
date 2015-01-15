@@ -7276,6 +7276,24 @@ function verse.plugins.groupchat(stream)
 		local occupants = room.occupants;
 		room:hook("presence", function (presence)
 			local nick = presence.nick or nick;
+
+            if presence.stanza.attr.type == "error" then
+                local errdata = presence.stanza:get_child("error");
+                local authError = false;
+
+                if errdata then
+                    authError = errdata:get_child("not-authorized", "urn:ietf:params:xml:ns:xmpp-stanzas");
+                end
+                
+                if authError then
+                    room.stream:event("groupchat/failed/locked", room);
+                else
+                    room.stream:event("groupchat/failed", room);
+                end
+
+                return;
+            end
+
 			if not occupants[nick] and presence.stanza.attr.type ~= "unavailable" then
 				occupants[nick] = {
 					nick = nick;
