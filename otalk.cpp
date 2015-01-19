@@ -37,6 +37,10 @@ void OTalk::leaveRoom(std::string room) {
     state["leaveRoom"](room);
 }
 
+void OTalk::setRoomKey(std::string rjid, std::string key) {
+    return state["setRoomKey"](rjid, key);
+}
+
 lua::Value OTalk::getRooms() {
     return state["getRooms"]();
 }

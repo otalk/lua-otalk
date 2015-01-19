@@ -94,6 +94,10 @@ function joinRoom(room, nick, key)
     end
 end
 
+function setRoomKey(room, key)
+    print("Would set the room key to: " .. key);
+end
+
 function leaveRoom(room)
 end
 

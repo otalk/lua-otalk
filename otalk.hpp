@@ -21,6 +21,7 @@ class OTalk {
         lua::Value emit;
         lua::Value joinRoom(std::string, std::string, std::string);
         void leaveRoom(std::string);
+        void setRoomKey(std::string, std::string);
         lua::Value getRooms();
         lua::Value getParticipants(std::string);
         void initiateSDPSession(std::string, std::string, std::string);
