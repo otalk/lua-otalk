@@ -7340,6 +7340,29 @@ function verse.plugins.groupchat(stream)
 				return room:event("subject-changed", { from = old_subject, to = subject, by = event.sender, event = event });
 			end
 		end, 2000);
+
+        room:hook("message", function(event)
+            local x = event.stanza:get_child("x", xmlns_muc .. "#user");
+            local config_changed = false;
+            if x then
+                for status in x:childtags("status", xmlns_muc .. "#user") do
+                    if status.attr.code == "104" then
+                        config_changed = true;
+                    end
+                end
+            end
+
+            if config_changed then
+                room:event("room-config-changed", room);
+                local config_fetch = verse.iq({
+                    to = room.jid,
+                    type = 'get'
+                });
+                config_fetch:tag("query", {xmlns = xmlns_muc .. "#owner"}):up();
+                room.stream:send(config_fetch); 
+            end
+        end, 2000);
+
 		local join_st = verse.presence():tag("x",{xmlns = xmlns_muc});
         if opts.password then
             join_st:tag("password"):text(opts.password);
