@@ -7353,13 +7353,39 @@ function verse.plugins.groupchat(stream)
             end
 
             if config_changed then
-                room:event("room-config-changed", room);
+                room:event("groupchat/config-changed", room);
                 local config_fetch = verse.iq({
                     to = room.jid,
                     type = 'get'
                 });
                 config_fetch:tag("query", {xmlns = xmlns_muc .. "#owner"}):up();
-                room.stream:send(config_fetch); 
+
+                room.stream:send_iq(config_fetch, function (stanza)
+                    if stanza.attr.type ~= "result" then
+                        return;
+                    end
+
+                    local owner_data = stanza:get_child("query", xmlns_muc .. "#owner");
+                    if not owner_data then
+                        return;
+                    end
+
+                    local config_form = owner_data:get_child("x", "jabber:x:data");
+                    if not config_form then
+                        return;
+                    end
+
+                    for field in config_form:childtags("field", "jabber:x:data") do
+                        if field.attr.var == "muc#roomconfig_roomsecret" then
+                            local password = field:get_child_text("value");
+                            if password == nil or password == "" then
+                                self:event("groupchat/unlocked", room);
+                            else
+                                self:event("groupchat/locked", room, password);
+                            end
+                        end
+                    end
+                end);
             end
         end, 2000);
 
