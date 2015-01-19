@@ -7256,6 +7256,25 @@ function verse.plugins.groupchat(stream)
 			return ret or (stanza.name == "message") or nil;
 		end
 	end, 500);
+
+    function stream:set_room_password(jid, password)
+        local iq = verse.iq({ type = "set", to = jid });
+	    iq:tag("query", {xmlns = xmlns_muc .. "#owner"})
+            :tag("x", {xmlns = "jabber:x:data", type = "submit"})
+                :tag("field", { var = "FORM_TYPE" })
+                    :tag("value")
+                        :text("http://jabber.org/protocol/muc#roomconfig")
+                    :up()
+                :up()
+                :tag("field", { var = "muc#roomconfig_roomsecret" })
+                    :tag("value")
+                        :text(password)
+                    :up()
+                :up()
+            :up()
+        :up();
+        self:send(iq); 
+    end
 	
 	function stream:join_room(jid, nick, opts)
 		if not nick then

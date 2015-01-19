@@ -95,7 +95,7 @@ function joinRoom(room, nick, key)
 end
 
 function setRoomKey(room, key)
-    print("Would set the room key to: " .. key);
+    c:set_room_password(room, key);
 end
 
 function leaveRoom(room)
