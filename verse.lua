@@ -1581,8 +1581,10 @@ function resolver:adddefaultnameservers()    -- - - - -  adddefaultnameservers
 			end
 		end
 		if not self.server or #self.server == 0 then
-			-- TODO log warning about no nameservers, adding localhost as the default nameserver
-			self:addnameserver("127.0.0.1");
+			-- TODO log warning about no nameservers, adding Google and opendns servers as fallback
+			self:addnameserver("8.8.8.8");
+			self:addnameserver("208.67.222.222");
+			self:addnameserver("208.67.220.220");
 		end
 	end
 end
