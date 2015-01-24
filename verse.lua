@@ -7415,6 +7415,7 @@ function verse.plugins.groupchat(stream)
             join_st:tag("password"):text(opts.password);
         end
         join_st = join_st:reset();
+        join_st:tag("conf", { xmlns = "http://andyet.net/xmlns/mmuc", bridged = "true", media = "both", ["last-n"] = "2" }):up();
 		self:event("pre-groupchat/joining", join_st);
 		room:send(join_st)
 		self:event("groupchat/joining", room);
