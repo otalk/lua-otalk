@@ -65,6 +65,10 @@ function resumeSession(sid)
     sess:resume();
 end
 
+function endSession(sid, reason)
+    jingleSession.endSessionBySID(sid, reason);
+end
+
 function muteSession(sid, media)
     local sess = jingleSession.getSessionBySID(sid);
     sess:mute(media);

@@ -72,6 +72,24 @@ M.getSessionBySID = function (sid)
     return global.sessions[sid];
 end
 
+M.endSessionBySID = function (sid, reason)
+    local sessionIndex
+    for i, session in ipairs(global.sessions) do
+        if sid == session.sid then
+            sessionIndex = i
+            break
+        end
+    end
+
+    local sess = global.sessions[sessionIndex]
+    if sess then
+        table.remove(global.sessions, sessionIndex)
+        sess:terminate(reason)
+    end
+
+    global.c:event("jingle/session-terminate", sid)
+end
+
 M.onSessionTerminate = function (req, sid)
     global.c:send(verse.reply(req));
 
@@ -83,7 +101,9 @@ M.onSessionTerminate = function (req, sid)
         end
     end
 
-    table.remove(global.sessions, sessionIndex)
+    if sessionIndex then
+        table.remove(global.sessions, sessionIndex)
+    end
 
     global.c:event("jingle/session-terminate", sid)
     return true

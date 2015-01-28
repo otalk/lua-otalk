@@ -89,6 +89,10 @@ void OTalk::resumeSession(std::string sid) {
     state["resumeSession"](sid);
 }
 
+void OTalk::endSession(std::string sid, std::string reason) {
+    state["endSession"](sid, reason);
+}
+
 void OTalk::addCandidate(std::string sid, std::string mid, std::string mline, std::string candidate) {
     state["addCandidate"](sid, mid, mline, candidate);
 }

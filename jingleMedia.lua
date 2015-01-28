@@ -236,6 +236,10 @@ function JingleMedia:resume()
     self:sendMediaInfo('resume');
 end
 
+function JingleMedia:terminate(reason)
+    self.client:send(self:createJingleStanza('session-terminate'));
+end
+
 function JingleMedia:active()
     self:sendMediaInfo('resume');
 end
