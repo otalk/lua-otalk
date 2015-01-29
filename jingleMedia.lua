@@ -172,6 +172,7 @@ function JingleMedia:onSourceAdd(req)
 end
 
 function JingleMedia:onSourceRemove(req)
+    -- Also remove source groups
     self.client:send(verse.reply(req));
     local jingle_tag = req:get_child('jingle', xmlns_jingle);
     local changesTable = jingletolua.jingleToTable(jingle_tag);
@@ -185,13 +186,17 @@ function JingleMedia:onSourceRemove(req)
                 local newContentsDesc = newContent.description
                 local newSSRCs = newContentsDesc.sources or {}
 
+                local indexes = {}
                 for j=#ssrcs,1,-1 do
-                    for _, newSSRC in pairs(newSSRCs) do
+                    for _, newSSRC in ipairs(newSSRCs) do
                         if ssrcs[j].ssrc == newSSRC.ssrc then
                             sourceRemoved = true
-                            table.remove(ssrcs, j)
+                            table.insert(indexes, j)
                         end
                     end
+                end
+                for k=#indexes,1 do
+                    table.remove(ssrcs, k)
                 end
             end
 
