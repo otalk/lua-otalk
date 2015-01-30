@@ -131,6 +131,32 @@ function on(name, func)
     end)
 end
 
+function presenceChanged(presenceInfo)
+    local presence = presenceInfo.presence
+
+    local isEntering
+    if "unavailable" == presence.attr["type"] then
+        isEntering = "false"
+    else
+        isEntering = "true"
+    end
+
+    local canUseBridge
+    local conf = presence:get_child("conf", "http://andyet.net/xmlns/mmuc")
+    if conf then
+        local bridged = conf.attr["bridged"]
+        if bridged == "true" or bridged == "1" then
+            canUseBridge = "true"
+        else
+            canUseBridge = "false"
+        end
+    else
+        canUseBridge = "false"
+    end
+
+    emit("presenceChanged", presenceInfo.jid, isEntering, canUseBridge)
+end
+
 function connect(jid, password)
     -- local jid, password = "user@server", "your-password";
 
@@ -138,6 +164,9 @@ function connect(jid, password)
     -- handy if you're hacking on Verse itself
     --os.execute("squish --minify-level=none verse");
 
+
+    c:hook("occupant-joined", presenceChanged)
+    c:hook("occupant-left", presenceChanged)
 
     -- Add some hooks for debugging
     c:hook("opened", function () print("Stream opened!") end);

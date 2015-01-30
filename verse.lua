@@ -7334,7 +7334,7 @@ function verse.plugins.groupchat(stream)
 				if nick == room.nick then
 					room.stream:event("groupchat/joined", room);
 				else
-					room:event("occupant-joined", occupants[nick]);
+					room.stream:event("occupant-joined", occupants[nick]);
 				end
 			elseif occupants[nick] and presence.stanza.attr.type == "unavailable" then
 				if nick == room.nick then
@@ -7346,7 +7346,7 @@ function verse.plugins.groupchat(stream)
 					end
 				else
 					occupants[nick].presence = presence.stanza;
-					room:event("occupant-left", occupants[nick]);
+					room.stream:event("occupant-left", occupants[nick]);
 					occupants[nick] = nil;
 				end
 			end
