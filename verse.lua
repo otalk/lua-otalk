@@ -7363,6 +7363,11 @@ function verse.plugins.groupchat(stream)
 		end, 2000);
 
         room:hook("message", function(event)
+        	local status = event.stanza:get_child("status", "http://andyet.net/xmlns/mmuc")
+        	if status then
+        		self:event("mmuc-status", room, status.attr.mode)
+        	end
+
             local x = event.stanza:get_child("x", xmlns_muc .. "#user");
             local config_changed = false;
             if x then
