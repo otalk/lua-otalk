@@ -84,6 +84,18 @@ function ringSession(sid)
     sess:ring();
 end
 
+function outgoingSessionExistsForJID(jid)
+    local sessions = jingleSession.getSessionsByJID(jid);
+    local sessionExists
+    for _, session in ipairs(sessions) do
+        if session.initiator == true then
+            sessionExists = true
+            break
+        end
+    end
+    return sessionExists
+end
+
 function emit(name, ...)
     c:event(name, unpack(arg));
 end

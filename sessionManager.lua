@@ -68,6 +68,10 @@ end
 M.endPeerSessions = function (peer, reason, silent)
 end
 
+M.getSessionsByJID = function (jid)
+    return global.peers[jid];
+end
+
 M.getSessionBySID = function (sid)
     return global.sessions[sid];
 end
