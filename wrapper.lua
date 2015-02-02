@@ -65,8 +65,8 @@ function resumeSession(sid)
     sess:resume();
 end
 
-function endSession(sid, reason)
-    jingleSession.endSessionBySID(sid, reason);
+function endSession(sid, reason, notify)
+    jingleSession.endSessionBySID(sid, reason, notify);
 end
 
 function muteSession(sid, media)
@@ -94,6 +94,10 @@ function outgoingSessionExistsForJID(jid)
         end
     end
     return sessionExists
+end
+
+function endSessionsForJID(jid, reason, notify)
+    jingleSession.endSessionsForJID(jid, reason, notify)
 end
 
 function emit(name, ...)

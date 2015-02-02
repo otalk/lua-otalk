@@ -76,27 +76,24 @@ M.getSessionBySID = function (sid)
     return global.sessions[sid];
 end
 
-M.endSessionBySID = function (sid, reason)
-    local sessionIndex
-    for i, session in ipairs(global.sessions) do
-        if sid == session.sid then
-            sessionIndex = i
-            break
+M.removeSessionFromPeers = function (session)
+    local jid = session.peer
+    local sessions = global.peers[jid]
+    local indexes = {}
+    for i, peerSession in ipairs(sessions) do
+        if session.sid == peerSession.sid then
+            table.insert(indexes, i)
         end
     end
-
-    local sess = global.sessions[sessionIndex]
-    if sess then
-        table.remove(global.sessions, sessionIndex)
-        sess:terminate(reason)
+    for i=#sessions,1 do
+        table.remove(sessions, j)
     end
-
-    global.c:event("jingle/session-terminate", sid)
+    if #sessions == 0 then
+        global.peer[jid] = nil
+    end
 end
 
-M.onSessionTerminate = function (req, sid)
-    global.c:send(verse.reply(req));
-
+M.endSessionBySID = function (sid, reason, notify)
     local sessionIndex
     for i, session in ipairs(global.sessions) do
         if sid == session.sid then
@@ -106,11 +103,30 @@ M.onSessionTerminate = function (req, sid)
     end
 
     if sessionIndex then
-        table.remove(global.sessions, sessionIndex)
+        local sess = table.remove(global.sessions, sessionIndex)
+        M.removeSessionFromPeers(sess)
+        if notify then
+            sess:terminate(reason)
+        end
     end
 
     global.c:event("jingle/session-terminate", sid)
+end
+
+M.onSessionTerminate = function (req, sid)
+    global.c:send(verse.reply(req));
+
+    M.endSessionBySID(sid, nil, false)
+
+    global.c:event("jingle/session-terminate", sid)
     return true
+end
+
+M.endSessionsForJID = function (jid, reason, notify)
+    local sessions = M.getSessionsByJID(jid);
+    for _, session in ipairs(sessions) do
+        M.endSessionBySID(session.sid, reason, notify)
+    end
 end
 
 M.handle = function (req)
@@ -166,7 +182,7 @@ M.handle = function (req)
 
     if action ~= "session-initiate" then
         if not session then
-            print("Uknown jingle session "..sid);
+            print("Unknown jingle session "..sid);
             local error_stanza = global.v.error_reply(req, 'cancel', 'item-not-found'):tag("unknown-session", { xmlns = xmlns_jingle_error }):up();
             global.c:send(error_stanza);
             return true;

@@ -34,8 +34,9 @@ class OTalk {
         void ringSession(std::string);
         void holdSession(std::string);
         void resumeSession(std::string);
-        void endSession(std::string sid, std::string reason);
+        void endSession(std::string sid, std::string reason, bool notify);
         bool outgoingSessionExists(std::string jid);
+        void endSessionsForJID(std::string jid, std::string reason, bool notify);
         void addCandidate(std::string, std::string, std::string, std::string);
 };
 #endif

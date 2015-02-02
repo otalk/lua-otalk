@@ -89,12 +89,16 @@ void OTalk::resumeSession(std::string sid) {
     state["resumeSession"](sid);
 }
 
-void OTalk::endSession(std::string sid, std::string reason) {
-    state["endSession"](sid, reason);
+void OTalk::endSession(std::string sid, std::string reason, bool notify) {
+    state["endSession"](sid, reason, notify);
 }
 
 bool OTalk::outgoingSessionExists(std::string jid) {
     return state["outgoingSessionExistsForJID"](jid);
+}
+
+void OTalk::endSessionsForJID(std::string jid, std::string reason, bool notify) {
+    state["endSessionsForJID"](jid, reason, notify);
 }
 
 void OTalk::addCandidate(std::string sid, std::string mid, std::string mline, std::string candidate) {
