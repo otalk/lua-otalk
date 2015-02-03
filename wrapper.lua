@@ -26,12 +26,17 @@ function acceptSession(sid, sdp)
     sess:acceptSDP(sdp);
 end
 
-function initiateSession(sid, peer, sdp)
-    local sess = jingleSession.newSession({
+function createSession(sid, peer)
+    print("New Session from Lua: " .. sid .. ":" .. peer)
+    jingleSession.newSession({
         sid = sid,
         peer = peer,
         initiator = true,
     });
+end
+
+function startSession(sid, sdp)
+    local sess = jingleSession.getSessionBySID(sid);
     sess:initiateSDP(sdp);
 end
 
@@ -86,8 +91,13 @@ end
 
 function outgoingSessionExistsForJID(jid)
     local sessions = jingleSession.getSessionsByJID(jid);
+    if not sessions then
+        return false
+    end
+
     local sessionExists
     for _, session in ipairs(sessions) do
+        print("Session from Lua: " .. session.sid .. ":" .. session.peer)
         if session.initiator == true then
             sessionExists = true
             break

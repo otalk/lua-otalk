@@ -124,6 +124,9 @@ end
 
 M.endSessionsForJID = function (jid, reason, notify)
     local sessions = M.getSessionsByJID(jid);
+    if not sessions then
+        return
+    end
     for _, session in ipairs(sessions) do
         M.endSessionBySID(session.sid, reason, notify)
     end

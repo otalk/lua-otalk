@@ -24,7 +24,8 @@ class OTalk {
         void setRoomKey(std::string, std::string);
         lua::Value getRooms();
         lua::Value getParticipants(std::string);
-        void initiateSDPSession(std::string, std::string, std::string);
+        void createSession(std::string sid, std::string peer);
+        void startSDPSession(std::string, std::string);
         void acceptSDPSession(std::string, std::string);
         void addSource(std::string, std::string);
         void removeSource(std::string, std::string);

@@ -49,8 +49,12 @@ lua::Value OTalk::getParticipants(std::string room) {
     return state["getParticipants"](room);
 }
 
-void OTalk::initiateSDPSession(std::string sid, std::string peer, std::string sdp) {
-    state["initiateSession"](sid, peer, sdp);
+void OTalk::createSession(std::string sid, std::string peer) {
+    state["createSession"](sid, peer);
+}
+
+void OTalk::startSDPSession(std::string sid, std::string sdp) {
+    state["startSession"](sid, sdp);
 }
 
 void OTalk::acceptSDPSession(std::string sid, std::string sdp) {
@@ -94,7 +98,8 @@ void OTalk::endSession(std::string sid, std::string reason, bool notify) {
 }
 
 bool OTalk::outgoingSessionExists(std::string jid) {
-    return state["outgoingSessionExistsForJID"](jid);
+    bool sessionExists =state["outgoingSessionExistsForJID"](jid);
+    return sessionExists;
 }
 
 void OTalk::endSessionsForJID(std::string jid, std::string reason, bool notify) {
