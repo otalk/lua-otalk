@@ -143,6 +143,7 @@ function JingleMedia:onSourceAdd(req)
         print("remote_state contents isn't empty in Lua land")
         local desc = content.description
         local ssrcs = desc.sources or {}
+        local groups = desc.sourceGroups or {}
 
         for _, newContent in ipairs(changesTable.contents) do
             print("there are new contents in Lua land")
@@ -151,15 +152,22 @@ function JingleMedia:onSourceAdd(req)
             if (content.name == newContent.name) then
                 print("names match in Lua land")
                 local newContentsDesc = newContent.description
-                local newSSRCs = newContentsDesc.sources or {}
 
+                local newSSRCs = newContentsDesc.sources or {}
                 for _, newSSRC in pairs(newSSRCs) do
                     print("A source was added in Lua land")
                     sourceAdded = true
                     table.insert(ssrcs, newSSRC)
                 end
 
+                local newGroups = newContentsDesc.sourceGroups or {}
+                for _, newGroup in pairs(newGroups) do
+                    print("A source group was added in Lua land")
+                    table.insert(groups, newGroup)
+                end
+
                 self.remote_state.contents[i].description.sources = ssrcs
+                self.remote_state.contents[i].description.sourceGroups = groups
             end
         end
     end
@@ -172,7 +180,6 @@ function JingleMedia:onSourceAdd(req)
 end
 
 function JingleMedia:onSourceRemove(req)
-    -- Also remove source groups
     self.client:send(verse.reply(req));
     local jingle_tag = req:get_child('jingle', xmlns_jingle);
     local changesTable = jingletolua.jingleToTable(jingle_tag);
@@ -180,11 +187,13 @@ function JingleMedia:onSourceRemove(req)
     for i, content in ipairs(self.remote_state.contents) do
         local desc = content.description
         local ssrcs = desc.sources or {}
+        local groups = desc.sourceGroups or {}
 
         for _, newContent in ipairs(changesTable.contents) do
             if (content.name == newContent.name) then
                 local newContentsDesc = newContent.description
                 local newSSRCs = newContentsDesc.sources or {}
+                local newGroups = newContentsDesc.sourceGroups or {}
 
                 local indexes = {}
                 for j=#ssrcs,1,-1 do
@@ -198,9 +207,32 @@ function JingleMedia:onSourceRemove(req)
                 for k=#indexes,1 do
                     table.remove(ssrcs, k)
                 end
+
+                local groupIndexes = {}
+                for l, newGroup in ipairs(newGroups) do
+                    for m, group in ipairs(groups) do
+                        local sources = groups.sources or {}
+                        local newSources = newGroups.sources or {}
+                        if newGroup.semantics == group.semantics and #newSources == #sources then
+                            local same = true;
+                            for n, newSource in ipairs(newSources) do
+                                if newSource ~= sources[n] then
+                                    same = false
+                                end
+                            end
+                            if (same) then
+                                table.insert(groupIndexes, m)
+                            end
+                        end
+                    end
+                end
+                for m=#groupIndexes,1 do
+                    table.remove(groups, m)
+                end
             end
 
             self.remote_state.contents[i].description.sources = ssrcs
+            self.remote_state.contents[i].description.sourceGroups = groups
         end
     end
 
