@@ -65,17 +65,17 @@ function Jingle:initialize(peer, sid, sdp)
 end
 
 function Jingle:process(action, req)
-    print("processing?");
+    --print("processing?");
     if ACTIONS[action] then
         if not self[ACTIONS[action]] then
-            print("We don't have one of those!");
+            --print("We don't have one of those!");
             self.client:send(req:error_reply('modify', 'feature-not-implemented'));
             return true;
         else
             return self[ACTIONS[action]](self, req);
         end
     else
-        print("Invalid action.");
+        --print("Invalid action.");
         self.client:send(req:error_reply('cancel', 'bad-request'));
         return true;
     end
@@ -139,7 +139,7 @@ function Jingle:check(state)
     if STATES[state] then
         return self[STATES[state]];
     end
-    print("State not found.");
+    --print("State not found.");
     return false;
 end
 
@@ -167,7 +167,11 @@ end
 function Jingle:onTransportReplace(req)
 end
 
-function Jingle:endSession(reason)
+function Jingle:terminate(reason)
+	local jingle = self:createJingleStanza('session-terminate')
+	local iq = self:createIqStanza()
+	iq:add_direct_child(jingle)
+    self.client:send(iq);
 end
 
 return Jingle;

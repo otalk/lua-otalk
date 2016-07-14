@@ -1,7 +1,7 @@
 #ifndef _OTALK_DEF
 #define _OTALK_DEF
 
-#include "./include/LuaState.h"
+#include "LuaState.h"
 #include <map>
 
 class OTalk {
@@ -15,10 +15,12 @@ class OTalk {
         void step();
         void connect(std::string, std::string);
         void connect(std::string);
+        void close();
         //std::function<lua::Value(std::string, std::function<void(lua::Value)>)> hook;
         void on(std::string, std::function<void(lua::Value)>);
         //void emit(std::string, lua::Value);
         lua::Value emit;
+        void checkTalkyVersion(std::string);
         lua::Value joinRoom(std::string, std::string, std::string);
         void leaveRoom(std::string);
         void setRoomKey(std::string, std::string);
@@ -30,8 +32,8 @@ class OTalk {
         void addSource(std::string, std::string);
         void removeSource(std::string, std::string);
         void activateSession(std::string);
-        void muteSession(std::string, std::string);
-        void unmuteSession(std::string, std::string);
+        void muteSession(std::string, std::string, std::string);
+        void unmuteSession(std::string, std::string, std::string);
         void ringSession(std::string);
         void holdSession(std::string);
         void resumeSession(std::string);
@@ -39,5 +41,6 @@ class OTalk {
         bool outgoingSessionExists(std::string jid);
         void endSessionsForJID(std::string jid, std::string reason, bool notify);
         void addCandidate(std::string, std::string, std::string, std::string);
+        void logEvent(std::string eventName, std::string muc, std::string metadata);
 };
 #endif

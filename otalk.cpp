@@ -25,16 +25,24 @@ void OTalk::connect(std::string jid, std::string password) {
     state["connect"](jid, password);
 }
 
+void OTalk::close() {
+	state["close"]();
+}
+
 void OTalk::on(std::string name, std::function<void(lua::Value)> callback) {
     state["on"](name, callback);
+}
+
+void OTalk::checkTalkyVersion(std::string mucHost) {
+    state["checkTalkyVersion"](mucHost);
 }
 
 lua::Value OTalk::joinRoom(std::string rjid, std::string nick, std::string password) {
     return state["joinRoom"](rjid, nick, password);
 }
 
-void OTalk::leaveRoom(std::string room) {
-    state["leaveRoom"](room);
+void OTalk::leaveRoom(std::string message) {
+    state["leaveRoom"](message);
 }
 
 void OTalk::setRoomKey(std::string rjid, std::string key) {
@@ -54,7 +62,9 @@ void OTalk::createSession(std::string sid, std::string peer) {
 }
 
 void OTalk::startSDPSession(std::string sid, std::string sdp) {
+    // state.lock();
     state["startSession"](sid, sdp);
+    // state.unlock();
 }
 
 void OTalk::acceptSDPSession(std::string sid, std::string sdp) {
@@ -73,12 +83,12 @@ void OTalk::activateSession(std::string sid) {
     state["activateSession"](sid);
 }
 
-void OTalk::muteSession(std::string sid, std::string media) {
-    state["muteSession"](sid, media);
+void OTalk::muteSession(std::string sid, std::string creator, std::string media) {
+    state["muteSession"](sid, creator, media);
 }
 
-void OTalk::unmuteSession(std::string sid, std::string media) {
-    state["unmuteSession"](sid, media);
+void OTalk::unmuteSession(std::string sid, std::string creator, std::string media) {
+    state["unmuteSession"](sid, creator, media);
 }
 
 void OTalk::ringSession(std::string sid) {
@@ -108,4 +118,8 @@ void OTalk::endSessionsForJID(std::string jid, std::string reason, bool notify) 
 
 void OTalk::addCandidate(std::string sid, std::string mid, std::string mline, std::string candidate) {
     state["addCandidate"](sid, mid, mline, candidate);
+}
+
+void OTalk::logEvent(std::string eventName, std::string muc, std::string metadata) {
+    state["logEvent"](eventName, muc, metadata);
 }

@@ -69,7 +69,16 @@ M.endPeerSessions = function (peer, reason, silent)
 end
 
 M.getSessionsByJID = function (jid)
-    return global.peers[jid];
+	local sessions = global.peers[jid]
+	if not sessions then
+        return nil
+    end
+
+	local copy = {}
+	for orig_key, orig_session in pairs(sessions) do
+		copy[orig_key] = orig_session
+	end
+    return copy
 end
 
 M.getSessionBySID = function (sid)
@@ -79,31 +88,20 @@ end
 M.removeSessionFromPeers = function (session)
     local jid = session.peer
     local sessions = global.peers[jid]
-    local indexes = {}
-    for i, peerSession in ipairs(sessions) do
-        if session.sid == peerSession.sid then
-            table.insert(indexes, i)
+    for i=#sessions,1,-1 do
+        if session.sid == sessions[i].sid then
+            table.remove(sessions, i)
         end
     end
-    for i=#sessions,1 do
-        table.remove(sessions, j)
-    end
     if #sessions == 0 then
-        global.peer[jid] = nil
+        global.peers[jid] = nil
     end
 end
 
 M.endSessionBySID = function (sid, reason, notify)
-    local sessionIndex
-    for i, session in ipairs(global.sessions) do
-        if sid == session.sid then
-            sessionIndex = i
-            break
-        end
-    end
-
-    if sessionIndex then
-        local sess = table.remove(global.sessions, sessionIndex)
+	local sess = global.sessions[sid]
+	if sess then
+		global.sessions[sid] = nil
         M.removeSessionFromPeers(sess)
         if notify then
             sess:terminate(reason)
@@ -118,7 +116,6 @@ M.onSessionTerminate = function (req, sid)
 
     M.endSessionBySID(sid, nil, false)
 
-    global.c:event("jingle/session-terminate", sid)
     return true
 end
 
@@ -185,28 +182,28 @@ M.handle = function (req)
 
     if action ~= "session-initiate" then
         if not session then
-            print("Unknown jingle session "..sid);
+            --print("Unknown jingle session "..sid);
             local error_stanza = global.v.error_reply(req, 'cancel', 'item-not-found'):tag("unknown-session", { xmlns = xmlns_jingle_error }):up();
             global.c:send(error_stanza);
             return true;
         end
 
         if session.peerID ~= sender or session:check('ended') then
-            print("Session has ended or action has the wrong sender");
+            --print("Session has ended or action has the wrong sender");
             local error_stanza = req:error_reply('cancel', 'conflict'):tag("tie-break", {xmlns = xmlns_jingle_error}):up();
             global.c:send(error_stanza);
             return true;
         end
 
         if action == "session-accept" and not session.isPending then
-            print("Tried to accept the session more than once");
+            --print("Tried to accept the session more than once");
             local error_stanza = req:error_reply('cancel', 'unexpected-request'):tag("out-of-order", {xmlns = xmlns_jingle_error}):up();
             global.c:send(error_stanza);
             return true;
         end
 
         if action ~= "session-terminate" and action == session.pendingAction then
-            print("Tie break during pending request");
+            --print("Tie break during pending request");
             local error_stanza = req:error_reply('cancel', 'conflict'):tag("tie-break", {xmlns = xmlns_jingle_error}):up();
             global.c:send(error_stanza);
             return true;
@@ -214,7 +211,7 @@ M.handle = function (req)
 
     elseif (session) then
         if session.peerID ~= sender then
-            print("Duplicate sid from new sender");
+            --print("Duplicate sid from new sender");
             local error_stanza = req:error_reply('cancel', "service-unavailable");
             global.c:send(error_stanza);
             return true;
@@ -222,18 +219,19 @@ M.handle = function (req)
 
         if session.isPending then
             if c.bound > session.peerID then
-                print("Tie break new session because of duplicate sids");
+                --print("Tie break new session because of duplicate sids");
                 local error_stanza = req:error_reply('cancel', 'conflict'):tag("tie-break", {xmlns = xmlns_jingle_error}):up();
                 global.c:send(error_stanza);
                 return true;
             end
         else
-            print("Someone is doing this wrong");
+            --print("Someone is doing this wrong");
             local error_stanza = req:error_reply('cancel', 'unexpected-request'):tag("out-of-order", {xmlns = xmlns_jingle_error}):up();
             global.c:send(error_stanza);
             return true;
         end
 
+--[[
     elseif (global.peers[sender] and #global.peers[sender] > 0) then
         --it's a tie!
         for sess_idx, sess in ipairs(global.peers[sender]) do
@@ -254,12 +252,13 @@ M.handle = function (req)
                 end
             end
         end
+--]]
     end
 
     if action == "session-initiate" then
         --for reals this time
         if dTCount == 0 then
-            print("session initiate has nothing we need");
+            --print("session initiate has nothing we need");
             local error_stanza = global.v.error_reply(req, 'cancel', 'bad-reqeust');
             global.c:send(error_stanza);
             return true;

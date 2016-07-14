@@ -31,7 +31,7 @@
 #include <cstring>
 #include <cmath>
 
-#include <lua.hpp>
+#include "lua.hpp"
 
 #include "./Traits.h"
 
@@ -43,6 +43,8 @@
 #include "./LuaReturn.h"
 #include "./LuaFunctor.h"
 #include "./LuaRef.h"
+
+//std::mutex lua_mutex;
 
 
 namespace lua {
@@ -95,7 +97,11 @@ namespace lua {
             
             if (loadLibs)
                 luaL_openlibs(_luaState);
-            
+
+            lua_getfield(_luaState, LUA_GLOBALSINDEX, "package");
+            lua_getfield(_luaState, -1, "preload");
+            lua_pushcfunction(_luaState, luaopen_lxp);
+            lua_setfield(_luaState, -2, LUA_LXPLIBNAME);
             
             // We will create metatable for Lua functors for memory management and actual function call
             luaL_newmetatable(_luaState, "luaL_Functor");
@@ -154,6 +160,13 @@ namespace lua {
             stack::push(_luaState, std::forward<T>(value));
             lua_setglobal(_luaState, key);
         }
+/*        void lock () {
+            lua_mutex.lock();
+        }
+
+        void unlock () {
+            lua_mutex.unlock();
+        }*/
 
         /// Executes file text on Lua state
         ///

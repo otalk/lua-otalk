@@ -1606,7 +1606,11 @@ function resolver:getsocket(servernum)    -- - - - - - - - - - - - - getsocket
 	sock:settimeout(0);
 	-- todo: attempt to use a random port, fallback to 0
 	sock:setsockname('*', 0);
-	sock:setpeername(self.server[servernum], 53);
+	local ok
+	ok, err = sock:setpeername(self.server[servernum], 53);
+	if not ok then
+		return nil, err;
+	end
 	self.socket[servernum] = sock;
 	self.socketset[sock] = servernum;
 	return sock;
@@ -2128,7 +2132,12 @@ function new_async_socket(sock, resolver)
 	
 	handler.settimeout = function () end
 	handler.setsockname = function (_, ...) return sock:setsockname(...); end
-	handler.setpeername = function (_, ...) peername = (...); local ret = sock:setpeername(...); _:set_send(dummy_send); return ret; end
+	handler.setpeername = function (_, ...)
+		peername = (...);
+		local ok, err = sock:setpeername(...);
+		_:set_send(dummy_send);
+		return ok, err;
+	end
 	handler.connect = function (_, ...) return sock:connect(...) end
 	--handler.send = function (_, data) _:write(data);  return _.sendbuffer and _.sendbuffer(); end
 	handler.send = function (_, data)
@@ -5313,25 +5322,25 @@ function verse.plugins.disco(stream)
 	end);
 	
 	local initial_disco_started;
-	stream:hook("ready", function ()
-		if initial_disco_started then return; end
-		initial_disco_started = true;
-		stream:disco_local_services(function (services)
-			for _, service in ipairs(services) do
-				local service_disco_info = stream.disco.cache[service.jid];
-				if service_disco_info then
-					for identity in pairs(service_disco_info.identities) do
-						local category, type = identity:match("^(.*)/(.*)$");
-						stream:event("disco/service-discovered/"..category, {
-							type = type, jid = service.jid;
-						});
-					end
-				end
-			end
-			stream:event("ready");
-		end);
-		return true;
-	end, 50);
+--	stream:hook("ready", function ()
+--		if initial_disco_started then return; end
+--		initial_disco_started = true;
+--		stream:disco_local_services(function (services)
+--			for _, service in ipairs(services) do
+--				local service_disco_info = stream.disco.cache[service.jid];
+--				if service_disco_info then
+--					for identity in pairs(service_disco_info.identities) do
+--						local category, type = identity:match("^(.*)/(.*)$");
+--						stream:event("disco/service-discovered/"..category, {
+--							type = type, jid = service.jid;
+--						});
+--					end
+--				end
+--			end
+--			stream:event("ready");
+--		end);
+--		return true;
+--	end, 50);
 	
 	stream:hook("presence-out", function (presence)
 		if not presence:get_child("c", xmlns_caps) then
@@ -7349,6 +7358,9 @@ function verse.plugins.groupchat(stream)
 					room.stream:event("occupant-left", occupants[nick]);
 					occupants[nick] = nil;
 				end
+			elseif occupants[nick] then
+				occupants[nick].presence = presence.stanza;
+				room.stream:event("occupant-presence-changed", occupants[nick]);
 			end
 		end);
 		room:hook("message", function(event)
@@ -8577,7 +8589,8 @@ function stream_callbacks.error(stream, e, stanza)
 	if stream:event(e, stanza) == nil then
 		local err = stanza:get_child(nil, "urn:ietf:params:xml:ns:xmpp-streams");
 		local text = stanza:get_child_text("text", "urn:ietf:params:xml:ns:xmpp-streams");
-		error(err.name..(text and ": "..text or ""));
+-- Not logging this error because it seems to block additional processing
+--		error(err.name..(text and ": "..text or ""));
 	end
 end
 
@@ -8667,7 +8680,9 @@ function stream:connect_client(jid, pass)
 	function self:close(reason)
 		self.close = _base_close;
 		if not self.closed then
-			self:send("</stream:stream>");
+			if self.send then
+				self:send("</stream:stream>");
+			end
 			self.closed = true;
 		else
 			return self:close(reason);
